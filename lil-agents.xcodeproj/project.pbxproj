@@ -7,9 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		991BBEEF2F9179D70096D33F /* RiveRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 991BBEEE2F9179D70096D33F /* RiveRuntime */; };
 		A10000010000000000000001 /* LilAgentsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000001 /* LilAgentsApp.swift */; };
 		A10000010000000000000002 /* walk-bruce-01.mov in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000002 /* walk-bruce-01.mov */; };
 		A10000010000000000000003 /* walk-jazz-01.mov in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000005 /* walk-jazz-01.mov */; };
+		A10000010000000000000099 /* cat_pomodoro.riv in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000099 /* cat_pomodoro.riv */; };
 		A10000010000000000000005 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000007 /* Assets.xcassets */; };
 		A10000010000000000000010 /* Sounds in Resources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000010 /* Sounds */; };
 		A10000010000000000000020 /* PopoverTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000020000000000000020 /* PopoverTheme.swift */; };
@@ -32,6 +34,7 @@
 /* Begin PBXFileReference section */
 		A10000020000000000000001 /* LilAgentsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LilAgentsApp.swift; sourceTree = "<group>"; };
 		A10000020000000000000002 /* walk-bruce-01.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = "walk-bruce-01.mov"; sourceTree = "<group>"; };
+		A10000020000000000000099 /* cat_pomodoro.riv */ = {isa = PBXFileReference; lastKnownFileType = file; path = "cat_pomodoro.riv"; sourceTree = "<group>"; };
 		A10000020000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000020000000000000004 /* LilAgents.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LilAgents.entitlements; sourceTree = "<group>"; };
 		A10000020000000000000005 /* walk-jazz-01.mov */ = {isa = PBXFileReference; lastKnownFileType = video.quicktime; path = "walk-jazz-01.mov"; sourceTree = "<group>"; };
@@ -60,6 +63,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000010000000000000030 /* Sparkle in Frameworks */,
+				991BBEEF2F9179D70096D33F /* RiveRuntime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -94,6 +98,7 @@
 				A10000020000000000000025 /* LilAgentsController.swift */,
 				A10000020000000000000002 /* walk-bruce-01.mov */,
 				A10000020000000000000005 /* walk-jazz-01.mov */,
+				A10000020000000000000099 /* cat_pomodoro.riv */,
 				A10000020000000000000007 /* Assets.xcassets */,
 				A10000020000000000000010 /* Sounds */,
 				A10000020000000000000003 /* Info.plist */,
@@ -128,6 +133,7 @@
 			name = LilAgents;
 			packageProductDependencies = (
 				A1000000B000000000000002 /* Sparkle */,
+				991BBEEE2F9179D70096D33F /* RiveRuntime */,
 			);
 			productName = LilAgents;
 			productReference = A10000030000000000000001 /* lil agents.app */;
@@ -159,6 +165,7 @@
 			mainGroup = A10000050000000000000001;
 			packageReferences = (
 				A1000000B000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				991BBEED2F9179D70096D33F /* XCRemoteSwiftPackageReference "rive-ios" */,
 			);
 			productRefGroup = A10000050000000000000003 /* Products */;
 			projectDirPath = "";
@@ -176,6 +183,7 @@
 			files = (
 				A10000010000000000000002 /* walk-bruce-01.mov in Resources */,
 				A10000010000000000000003 /* walk-jazz-01.mov in Resources */,
+				A10000010000000000000099 /* cat_pomodoro.riv in Resources */,
 				A10000010000000000000005 /* Assets.xcassets in Resources */,
 				A10000010000000000000010 /* Sounds in Resources */,
 			);
@@ -396,6 +404,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		991BBEED2F9179D70096D33F /* XCRemoteSwiftPackageReference "rive-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/rive-app/rive-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.19.0;
+			};
+		};
 		A1000000B000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/sparkle-project/Sparkle";
@@ -407,6 +423,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		991BBEEE2F9179D70096D33F /* RiveRuntime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 991BBEED2F9179D70096D33F /* XCRemoteSwiftPackageReference "rive-ios" */;
+			productName = RiveRuntime;
+		};
 		A1000000B000000000000002 /* Sparkle */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = A1000000B000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */;

@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import Sparkle
+import ServiceManagement
 
 @main
 struct LilAgentsApp: App {
@@ -32,23 +33,65 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem?.button {
-            button.image = NSImage(named: "MenuBarIcon") ?? NSImage(systemSymbolName: "figure.walk", accessibilityDescription: "lil agents")
+            button.image = catEmojiImage()
         }
 
+        buildMenu()
+    }
+
+    private func catEmojiImage() -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { _ in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return true }
+            ctx.setFillColor(NSColor.black.cgColor)
+
+            // Left ear
+            ctx.beginPath()
+            ctx.move(to: CGPoint(x: 1, y: 9))
+            ctx.addLine(to: CGPoint(x: 4.5, y: 16))
+            ctx.addLine(to: CGPoint(x: 8, y: 12))
+            ctx.closePath()
+            ctx.fillPath()
+
+            // Right ear
+            ctx.beginPath()
+            ctx.move(to: CGPoint(x: 17, y: 9))
+            ctx.addLine(to: CGPoint(x: 13.5, y: 16))
+            ctx.addLine(to: CGPoint(x: 10, y: 12))
+            ctx.closePath()
+            ctx.fillPath()
+
+            // Head
+            ctx.fillEllipse(in: CGRect(x: 2, y: 1, width: 14, height: 13))
+
+            // Eyes — punched out
+            ctx.setBlendMode(.clear)
+            ctx.fillEllipse(in: CGRect(x: 5, y: 5.5, width: 2.8, height: 2.8))
+            ctx.fillEllipse(in: CGRect(x: 10.2, y: 5.5, width: 2.8, height: 2.8))
+            ctx.setBlendMode(.normal)
+
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
+    @discardableResult
+    func buildMenu() -> NSMenu {
         let menu = NSMenu()
 
-        let char1Item = NSMenuItem(title: "Bruce", action: #selector(toggleChar1), keyEquivalent: "1")
-        char1Item.state = .on
-        menu.addItem(char1Item)
-
-        let char2Item = NSMenuItem(title: "Jazz", action: #selector(toggleChar2), keyEquivalent: "2")
-        char2Item.state = .on
-        menu.addItem(char2Item)
+        let catVisible = controller?.characters.first?.isManuallyVisible ?? true
+        let showHideItem = NSMenuItem(
+            title: catVisible ? "Hide Cat" : "Show Cat",
+            action: #selector(toggleCatVisibility),
+            keyEquivalent: ""
+        )
+        menu.addItem(showHideItem)
 
         menu.addItem(NSMenuItem.separator())
 
         let soundItem = NSMenuItem(title: "Sounds", action: #selector(toggleSounds(_:)), keyEquivalent: "")
-        soundItem.state = .on
+        soundItem.state = WalkerCharacter.soundsEnabled ? .on : .off
         menu.addItem(soundItem)
 
         // Provider submenu (applies to all characters)
@@ -72,30 +115,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         providerItem.submenu = providerMenu
         menu.addItem(providerItem)
 
-        // Size submenu (applies to all characters)
-        let sizeItem = NSMenuItem(title: "Size", action: nil, keyEquivalent: "")
-        let sizeMenu = NSMenu()
-        let currentSize = controller?.characters.first?.size ?? .large
-        for (i, size) in CharacterSize.allCases.enumerated() {
-            let item = NSMenuItem(title: size.displayName, action: #selector(switchCharacterSize(_:)), keyEquivalent: "")
+        // Cat color submenu
+        let colorItem = NSMenuItem(title: "Color", action: nil, keyEquivalent: "")
+        let colorMenu = NSMenu()
+        let catColors: [(display: String, anim: String)] = [
+            ("Gray",    "gray"),
+            ("Ungu",    "ungu"),
+            ("Blue",    "Blue"),
+            ("Calico",  "calico"),
+            ("Black",   "Black"),
+            ("White",   "white"),
+            ("Orange",  "orange"),
+        ]
+        let currentColor = controller?.characters.first?.catColorAnimation ?? "gray"
+        for (i, color) in catColors.enumerated() {
+            let item = NSMenuItem(title: color.display, action: #selector(switchCatColor(_:)), keyEquivalent: "")
             item.tag = i
-            item.state = size == currentSize ? .on : .off
-            sizeMenu.addItem(item)
+            item.state = color.anim == currentColor ? .on : .off
+            colorMenu.addItem(item)
         }
-        sizeItem.submenu = sizeMenu
-        menu.addItem(sizeItem)
-
-        // Theme submenu
-        let themeItem = NSMenuItem(title: "Style", action: nil, keyEquivalent: "")
-        let themeMenu = NSMenu()
-        for (i, theme) in PopoverTheme.allThemes.enumerated() {
-            let item = NSMenuItem(title: theme.name, action: #selector(switchTheme(_:)), keyEquivalent: "")
-            item.tag = i
-            item.state = theme.name == PopoverTheme.current.name ? .on : .off
-            themeMenu.addItem(item)
-        }
-        themeItem.submenu = themeMenu
-        menu.addItem(themeItem)
+        colorItem.submenu = colorMenu
+        menu.addItem(colorItem)
 
         // Display submenu
         let displayItem = NSMenuItem(title: "Display", action: nil, keyEquivalent: "")
@@ -118,6 +158,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        let launchItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
+        launchItem.state = launchAtLoginEnabled() ? .on : .off
+        menu.addItem(launchItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "")
         updateItem.target = updaterController
         menu.addItem(updateItem)
@@ -128,6 +174,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quitItem)
 
         statusItem?.menu = menu
+        return menu
+    }
+
+    @objc func toggleCatVisibility() {
+        guard let char = controller?.characters.first else { return }
+        char.setManuallyVisible(!char.isManuallyVisible)
+        buildMenu()
     }
 
     // MARK: - Menu Actions
@@ -186,6 +239,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             for item in providerMenu.items {
                 item.state = item.tag == idx ? .on : .off
             }
+        }
+    }
+
+    @objc func switchCatColor(_ sender: NSMenuItem) {
+        let catColors = ["gray", "ungu", "Blue", "calico", "Black", "white", "orange"]
+        guard sender.tag < catColors.count else { return }
+        let animName = catColors[sender.tag]
+        controller?.characters.forEach { $0.applyCatColor(animName) }
+        if let colorMenu = sender.menu {
+            for item in colorMenu.items { item.state = item.tag == sender.tag ? .on : .off }
         }
     }
 
@@ -252,6 +315,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 char.session?.terminate()
                 char.session = nil
             }
+        }
+    }
+
+    private func launchAtLoginEnabled() -> Bool {
+        if #available(macOS 13.0, *) {
+            return SMAppService.mainApp.status == .enabled
+        }
+        return false
+    }
+
+    @objc func toggleLaunchAtLogin(_ sender: NSMenuItem) {
+        if #available(macOS 13.0, *) {
+            do {
+                if SMAppService.mainApp.status == .enabled {
+                    try SMAppService.mainApp.unregister()
+                    sender.state = .off
+                } else {
+                    try SMAppService.mainApp.register()
+                    sender.state = .on
+                }
+            } catch {
+                NSLog("Launch at login error: %@", "\(error)")
+            }
+        } else {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.LoginItems-Settings.Extension")!)
         }
     }
 

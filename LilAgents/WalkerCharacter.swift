@@ -1,13 +1,14 @@
 import AVFoundation
 import AppKit
+import RiveRuntime
 
 enum CharacterSize: String, CaseIterable {
     case large, medium, small
     var height: CGFloat {
         switch self {
-        case .large: return 200
-        case .medium: return 150
-        case .small: return 100
+        case .large: return 280
+        case .medium: return 210
+        case .small: return 140
         }
     }
     var displayName: String {
@@ -19,9 +20,66 @@ enum CharacterSize: String, CaseIterable {
     }
 }
 
+enum CatAnimationState: Equatable {
+    case idle
+    case focusing       // Popover open — Fokus_lvl_1
+    case questioning    // User just sent a message — Fokus_Transision 2
+    case thinking       // Claude is working — Fokus_lvl_2
+    case deepThinking   // Claude busy > 5 min — Fokus_lvl_3
+    case drinkingCoffee // 30 min session
+    case crying         // 2 hr session
+    case sleepy         // 20 min idle
+    case sleeping       // 30 min idle
+    case done
+}
+
 class WalkerCharacter {
     let videoName: String
     let name: String
+
+    // Rive support
+    var riveName: String?
+    var riveViewModel: RiveViewModel?
+    var riveContentView: NSView?
+    private var currentCatState: CatAnimationState = .idle
+    private var idleCycleTimer: Timer?
+    private static let idleVariants = ["Idle", "Idle 2", "Idle 3"]
+
+    // Activity tracking
+    private var lastActivityTime: CFTimeInterval = CACurrentMediaTime()
+    private var sessionStartTime: CFTimeInterval = CACurrentMediaTime()
+    private var agentBusyStartTime: CFTimeInterval = 0
+    private let sleepyAfterSeconds:      CFTimeInterval = 1200  // 20 min idle
+    private let sleepAfterSeconds:       CFTimeInterval = 1800  // 30 min idle
+    private let deepThinkAfterSeconds:   CFTimeInterval = 300   // 5 min busy
+    private let coffeeAfterSeconds:      CFTimeInterval = 1800  // 30 min session
+    private let cryAfterSeconds:         CFTimeInterval = 7200  // 2 hr session
+
+    var catColorAnimation: String {
+        get { UserDefaults.standard.string(forKey: "\(name)CatColor") ?? "gray" }
+        set { UserDefaults.standard.set(newValue, forKey: "\(name)CatColor") }
+    }
+
+    func applyCatColor(_ animName: String) {
+        catColorAnimation = animName
+        guard let rvm = riveViewModel else { return }
+        // Bypass triggerCatAnimation's same-state guard — apply the new color immediately
+        // by re-running the current body animation with the updated color fill.
+        let bodyAnim: String
+        switch currentCatState {
+        case .idle, .done:    bodyAnim = Self.idleVariants.randomElement() ?? "Idle"
+        case .focusing:       bodyAnim = "Fokus_lvl_1"
+        case .questioning:    bodyAnim = "Fokus_Transision 2"
+        case .thinking:       bodyAnim = "Fokus_lvl_2"
+        case .deepThinking:   bodyAnim = "Fokus_lvl_3 "
+        case .drinkingCoffee: bodyAnim = "Break"
+        case .crying:         bodyAnim = "crying"
+        case .sleepy:         bodyAnim = "Sleepy"
+        case .sleeping:       bodyAnim = "Sleep"
+        }
+        playBodyAnimation(bodyAnim, rvm: rvm)
+    }
+
     var provider: AgentProvider {
         get {
             let raw = UserDefaults.standard.string(forKey: "\(name)Provider") ?? "claude"
@@ -51,7 +109,6 @@ class WalkerCharacter {
     private(set) var displayHeight: CGFloat = 200
     var displayWidth: CGFloat { displayHeight * (videoWidth / videoHeight) }
 
-    // Walk timing (per-character, from frame analysis)
     let videoDuration: CFTimeInterval = 10.0
     var accelStart: CFTimeInterval = 3.0
     var fullSpeedStart: CFTimeInterval = 3.75
@@ -62,7 +119,6 @@ class WalkerCharacter {
     var flipXOffset: CGFloat = 0
     var characterColor: NSColor = .gray
 
-    // Walk state
     var playCount = 0
     var walkStartTime: CFTimeInterval = 0
     var positionProgress: CGFloat = 0.0
@@ -73,14 +129,14 @@ class WalkerCharacter {
     var walkStartPos: CGFloat = 0.0
     var walkEndPos: CGFloat = 0.0
     var currentTravelDistance: CGFloat = 500.0
-    // Walk endpoints stored in pixels for consistent speed across screen switches
     var walkStartPixel: CGFloat = 0.0
     var walkEndPixel: CGFloat = 0.0
 
-    // Onboarding
+    var walksEnabled = true
     var isOnboarding = false
-
-    // Popover state
+    private var clickCount = 0
+    private var lastClickTime: CFTimeInterval = 0
+    private var isQuitting = false
     var isIdleForPopover = false
     var popoverWindow: NSWindow?
     var terminalView: TerminalView?
@@ -97,9 +153,10 @@ class WalkerCharacter {
     private var wasPopoverVisibleBeforeEnvironmentHide = false
     private var wasBubbleVisibleBeforeEnvironmentHide = false
 
-    init(videoName: String, name: String) {
+    init(videoName: String = "", name: String, riveName: String? = nil) {
         self.videoName = videoName
         self.name = name
+        self.riveName = riveName
         self.displayHeight = size.height
     }
 
@@ -109,26 +166,38 @@ class WalkerCharacter {
         displayHeight = size.height
         let newWidth = displayWidth
         let newHeight = displayHeight
-        
+
         DispatchQueue.main.async { [weak self] in
             guard let self = self, let window = self.window else { return }
             let oldFrame = window.frame
             let newFrame = CGRect(x: oldFrame.origin.x, y: oldFrame.origin.y, width: newWidth, height: newHeight)
-            
+
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             window.setFrame(newFrame, display: true)
-            self.playerLayer.frame = CGRect(x: 0, y: 0, width: newWidth, height: newHeight)
+            if let rv = self.riveContentView {
+                rv.frame = CGRect(x: 0, y: 0, width: newWidth, height: newHeight)
+            } else {
+                self.playerLayer.frame = CGRect(x: 0, y: 0, width: newWidth, height: newHeight)
+            }
             if let hostView = window.contentView {
                 hostView.frame = CGRect(x: 0, y: 0, width: newWidth, height: newHeight)
             }
             CATransaction.commit()
-            
+
             self.updateFlip()
         }
     }
 
     func setup() {
+        if let riveName = riveName {
+            setupRive(fileName: riveName)
+        } else {
+            setupVideo()
+        }
+    }
+
+    private func setupVideo() {
         guard let videoURL = Bundle.main.url(forResource: videoName, withExtension: "mov") else {
             print("Video \(videoName) not found")
             return
@@ -149,18 +218,7 @@ class WalkerCharacter {
         let y = dockTopY - bottomPadding + yOffset
 
         let contentRect = CGRect(x: 0, y: y, width: displayWidth, height: displayHeight)
-        window = NSWindow(
-            contentRect: contentRect,
-            styleMask: .borderless,
-            backing: .buffered,
-            defer: false
-        )
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.hasShadow = false
-        window.level = .statusBar
-        window.ignoresMouseEvents = false
-        window.collectionBehavior = [.moveToActiveSpace, .stationary]
+        window = makeCharacterWindow(contentRect: contentRect)
 
         let hostView = CharacterContentView(frame: CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight))
         hostView.character = self
@@ -172,6 +230,131 @@ class WalkerCharacter {
         window.orderFrontRegardless()
     }
 
+    private func setupRive(fileName: String) {
+        let rvm = RiveViewModel(
+            fileName: fileName,
+            animationName: "App Launch",
+            autoPlay: true
+        )
+        riveViewModel = rvm
+
+        let screen = NSScreen.main!
+        let dockTopY = screen.visibleFrame.origin.y
+        let bottomPadding = displayHeight * 0.15
+        let y = dockTopY - bottomPadding + yOffset
+
+        let contentRect = CGRect(x: 0, y: y, width: displayWidth, height: displayHeight)
+        window = makeCharacterWindow(contentRect: contentRect)
+
+        let hostView = CharacterContentView(frame: CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight))
+        hostView.character = self
+        hostView.wantsLayer = true
+        hostView.layer?.backgroundColor = NSColor.clear.cgColor
+
+        // RiveView is NSView on macOS — connect it to the view model
+        let rv = RiveView()
+        rv.frame = CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight)
+        rv.autoresizingMask = [.width, .height]
+        rv.wantsLayer = true
+        rv.layer?.backgroundColor = NSColor.clear.cgColor
+        rvm.setView(rv)
+        hostView.addSubview(rv)
+        riveContentView = rv
+
+        window.contentView = hostView
+        window.orderFrontRegardless()
+
+        // After App Launch finishes, hide fish, apply saved color, start idle cycling
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self, weak rvm] in
+            if let colorAnim = self?.catColorAnimation {
+                rvm?.play(animationName: colorAnim)
+            }
+            self?.startIdleCycling()
+        }
+    }
+
+    private func makeCharacterWindow(contentRect: CGRect) -> NSWindow {
+        let win = NSWindow(
+            contentRect: contentRect,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        win.isOpaque = false
+        win.backgroundColor = .clear
+        win.hasShadow = false
+        win.level = .statusBar
+        win.ignoresMouseEvents = false
+        win.collectionBehavior = [.moveToActiveSpace, .stationary]
+        return win
+    }
+
+    // MARK: - Cat Animation State
+
+    func triggerCatAnimation(_ state: CatAnimationState) {
+        guard let rvm = riveViewModel, state != currentCatState else { return }
+        currentCatState = state
+
+        switch state {
+        case .idle, .done:
+            startIdleCycling()
+        case .focusing:
+            idleCycleTimer?.invalidate(); idleCycleTimer = nil
+            playBodyAnimation("Fokus_lvl_1", rvm: rvm)
+        case .questioning:
+            idleCycleTimer?.invalidate(); idleCycleTimer = nil
+            playBodyAnimation("Fokus_Transision 2", rvm: rvm)
+        case .thinking:
+            idleCycleTimer?.invalidate(); idleCycleTimer = nil
+            playBodyAnimation("Fokus_lvl_2", rvm: rvm)
+        case .deepThinking:
+            idleCycleTimer?.invalidate(); idleCycleTimer = nil
+            playBodyAnimation("Fokus_lvl_3 ", rvm: rvm)
+        case .drinkingCoffee:
+            idleCycleTimer?.invalidate(); idleCycleTimer = nil
+            playBodyAnimation("Break", rvm: rvm)
+        case .crying:
+            idleCycleTimer?.invalidate(); idleCycleTimer = nil
+            playBodyAnimation("crying", rvm: rvm)
+        case .sleepy:
+            idleCycleTimer?.invalidate(); idleCycleTimer = nil
+            playBodyAnimation("Sleepy", rvm: rvm)
+        case .sleeping:
+            idleCycleTimer?.invalidate(); idleCycleTimer = nil
+            playBodyAnimation("Sleep", rvm: rvm)
+        }
+    }
+
+    // Synchronously advance the color animation by 1ms so its fill keyframes are written to
+    // the artboard, then immediately start the body animation looping. The body animation
+    // does not key fill colors, so the artboard retains the color values from the color anim.
+    private func playBodyAnimation(_ bodyAnim: String, rvm: RiveViewModel) {
+        if let model = rvm.riveModel {
+            try? model.setAnimation(catColorAnimation)
+            if let anim = model.animation {
+                let dur = Double(anim.effectiveDurationInSeconds())
+                _ = anim.advance(by: dur > 0 ? dur : 0.1)
+            }
+        }
+        rvm.play(animationName: bodyAnim, loop: .loop)
+    }
+
+    private func startIdleCycling() {
+        idleCycleTimer?.invalidate()
+        guard let rvm = riveViewModel else { return }
+        let variant = Self.idleVariants.randomElement() ?? "Idle"
+        playBodyAnimation(variant, rvm: rvm)
+        let interval = Double.random(in: 8.0...14.0)
+        idleCycleTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            guard let self = self, self.currentCatState == .idle || self.currentCatState == .done else { return }
+            self.currentCatState = .idle
+            self.startIdleCycling()
+        }
+    }
+
+    private func rivePlay() { riveViewModel?.play() }
+    private func rivePause() { riveViewModel?.pause() }
+
     // MARK: - Visibility
 
     func setManuallyVisible(_ visible: Bool) {
@@ -181,7 +364,7 @@ class WalkerCharacter {
                 window.orderFrontRegardless()
             }
         } else {
-            queuePlayer.pause()
+            if riveViewModel != nil { rivePause() } else { queuePlayer?.pause() }
             window.orderOut(nil)
             popoverWindow?.orderOut(nil)
             thinkingBubbleWindow?.orderOut(nil)
@@ -195,7 +378,7 @@ class WalkerCharacter {
         wasPopoverVisibleBeforeEnvironmentHide = popoverWindow?.isVisible ?? false
         wasBubbleVisibleBeforeEnvironmentHide = thinkingBubbleWindow?.isVisible ?? false
 
-        queuePlayer.pause()
+        if riveViewModel != nil { rivePause() } else { queuePlayer?.pause() }
         window.orderOut(nil)
         popoverWindow?.orderOut(nil)
         thinkingBubbleWindow?.orderOut(nil)
@@ -214,10 +397,11 @@ class WalkerCharacter {
         guard isManuallyVisible else { return }
 
         window.orderFrontRegardless()
-        if isWalking {
-            queuePlayer.play()
+        if riveViewModel != nil {
+            rivePlay()
+        } else if isWalking {
+            queuePlayer?.play()
         }
-
         if isIdleForPopover && wasPopoverVisibleBeforeEnvironmentHide {
             updatePopoverPosition()
             popoverWindow?.orderFrontRegardless()
@@ -235,6 +419,23 @@ class WalkerCharacter {
     // MARK: - Click Handling & Popover
 
     func handleClick() {
+        guard !isQuitting else { return }
+
+        let now = CACurrentMediaTime()
+        if now - lastClickTime < 0.5 {
+            clickCount += 1
+        } else {
+            clickCount = 1
+        }
+        lastClickTime = now
+
+        if clickCount >= 3 {
+            clickCount = 0
+            triggerQuitSequence()
+            return
+        }
+
+        lastActivityTime = now
         if isOnboarding {
             openOnboardingPopover()
             return
@@ -246,6 +447,20 @@ class WalkerCharacter {
         }
     }
 
+    private func triggerQuitSequence() {
+        isQuitting = true
+        if isIdleForPopover {
+            popoverWindow?.orderOut(nil)
+            isIdleForPopover = false
+        }
+        riveViewModel?.play(animationName: "angry")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            self?.setManuallyVisible(false)
+            self?.isQuitting = false
+            self?.clickCount = 0
+        }
+    }
+
     private func openOnboardingPopover() {
         showingCompletion = false
         hideBubble()
@@ -253,24 +468,28 @@ class WalkerCharacter {
         isIdleForPopover = true
         isWalking = false
         isPaused = true
-        queuePlayer.pause()
-        queuePlayer.seek(to: .zero)
+
+        if riveViewModel != nil {
+            rivePause()
+        } else {
+            queuePlayer?.pause()
+            queuePlayer?.seek(to: .zero)
+        }
 
         if popoverWindow == nil {
             createPopoverWindow()
         }
 
-        // Show static welcome message instead of Claude terminal
         terminalView?.inputField.isEditable = false
         terminalView?.inputField.placeholderString = ""
         let welcome = """
-        hey! we're bruce and jazz — your lil dock agents.
+        hey! i'm your lil dock agent.
 
-        click either of us to open a Claude AI chat. we'll walk around while you work and let you know when Claude's thinking.
+        click me to open a Claude AI chat. i'll hang around while you work and let you know when Claude's thinking.
 
         check the menu bar icon (top right) for themes, sounds, and more options.
 
-        click anywhere outside to dismiss, then click us again to start chatting.
+        click anywhere outside to dismiss, then click me again to start chatting.
         """
         terminalView?.appendStreamingText(welcome)
         terminalView?.endStreaming()
@@ -278,7 +497,6 @@ class WalkerCharacter {
         updatePopoverPosition()
         popoverWindow?.orderFrontRegardless()
 
-        // Set up click-outside to dismiss and complete onboarding
         clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
             self?.closeOnboarding()
         }
@@ -298,12 +516,11 @@ class WalkerCharacter {
         isOnboarding = false
         isPaused = true
         pauseEndTime = CACurrentMediaTime() + Double.random(in: 1.0...3.0)
-        queuePlayer.seek(to: .zero)
+        if riveViewModel == nil { queuePlayer?.seek(to: .zero) }
         controller?.completeOnboarding()
     }
 
     func openPopover() {
-        // Close any other open popover
         if let siblings = controller?.characters {
             for sibling in siblings where sibling !== self && sibling.isIdleForPopover {
                 sibling.closePopover()
@@ -313,10 +530,16 @@ class WalkerCharacter {
         isIdleForPopover = true
         isWalking = false
         isPaused = true
-        queuePlayer.pause()
-        queuePlayer.seek(to: .zero)
+        lastActivityTime = CACurrentMediaTime()
 
-        // Always clear any bubble (thinking or completion) when popover opens
+        if riveViewModel != nil {
+            triggerCatAnimation(.focusing)
+            rivePlay()
+        } else {
+            queuePlayer?.pause()
+            queuePlayer?.seek(to: .zero)
+        }
+
         showingCompletion = false
         hideBubble()
 
@@ -343,7 +566,6 @@ class WalkerCharacter {
             popoverWindow?.makeFirstResponder(terminal.inputField)
         }
 
-        // Remove old monitors before adding new ones
         removeEventMonitors()
 
         clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
@@ -372,18 +594,22 @@ class WalkerCharacter {
 
         isIdleForPopover = false
 
-        // If still waiting for a response, show thinking bubble immediately
-        // If completion came while popover was open, show completion bubble
         if showingCompletion {
-            // Reset expiry so user gets the full 3s from now
             completionBubbleExpiry = CACurrentMediaTime() + 3.0
             showBubble(text: currentPhrase, isCompletion: true)
         } else if isAgentBusy {
-            // Force a fresh phrase pick and show immediately
             currentPhrase = ""
             lastPhraseUpdate = 0
             updateThinkingPhrase()
             showBubble(text: currentPhrase, isCompletion: false)
+        }
+
+        if riveViewModel != nil {
+            if !isAgentBusy {
+                triggerCatAnimation(.idle)
+            }
+            // if busy, update() will keep/set the correct thinking animation
+            rivePlay()
         }
 
         let delay = Double.random(in: 2.0...5.0)
@@ -455,7 +681,6 @@ class WalkerCharacter {
         arrowBtn.action = #selector(showProviderMenu(_:))
         titleBar.addSubview(arrowBtn)
 
-        // Make the title label clickable too
         let clickArea = NSButton(frame: NSRect(x: 0, y: 0, width: arrowBtn.frame.maxX + 4, height: 28))
         clickArea.isTransparent = true
         clickArea.target = self
@@ -493,7 +718,10 @@ class WalkerCharacter {
         terminal.provider = provider
         terminal.autoresizingMask = [.width, .height]
         terminal.onSendMessage = { [weak self] message in
-            self?.session?.send(message: message)
+            guard let self = self else { return }
+            self.lastActivityTime = CACurrentMediaTime()
+            self.agentBusyStartTime = 0
+            self.session?.send(message: message)
         }
         terminal.onClearRequested = { [weak self] in
             self?.resetSession()
@@ -519,28 +747,49 @@ class WalkerCharacter {
         session = newSession
         wireSession(newSession)
         newSession.start()
+        triggerCatAnimation(.idle)
     }
 
     private func wireSession(_ session: any AgentSession) {
         session.onText = { [weak self] text in
-            self?.currentStreamingText += text
-            self?.terminalView?.appendStreamingText(text)
+            guard let self = self else { return }
+            self.currentStreamingText += text
+            self.terminalView?.appendStreamingText(text)
+            if self.agentBusyStartTime == 0 {
+                self.agentBusyStartTime = CACurrentMediaTime()
+                self.triggerCatAnimation(.thinking)
+            }
         }
 
         session.onTurnComplete = { [weak self] in
-            self?.terminalView?.endStreaming()
-            self?.playCompletionSound()
-            self?.showCompletionBubble()
+            guard let self = self else { return }
+            self.terminalView?.endStreaming()
+            self.playCompletionSound()
+            self.showCompletionBubble()
+            self.agentBusyStartTime = 0
+            self.lastActivityTime = CACurrentMediaTime()
+            self.triggerCatAnimation(.done)
+            // Return to idle after 3 s
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                self?.triggerCatAnimation(.idle)
+            }
         }
 
         session.onError = { [weak self] text in
-            self?.terminalView?.appendError(text)
+            guard let self = self else { return }
+            self.terminalView?.appendError(text)
+            self.agentBusyStartTime = 0
+            self.triggerCatAnimation(.idle)
         }
 
         session.onToolUse = { [weak self] toolName, input in
             guard let self = self else { return }
             let summary = self.formatToolInput(input)
             self.terminalView?.appendToolUse(toolName: toolName, summary: summary)
+            if self.agentBusyStartTime == 0 {
+                self.agentBusyStartTime = CACurrentMediaTime()
+                self.triggerCatAnimation(.thinking)
+            }
         }
 
         session.onToolResult = { [weak self] summary, isError in
@@ -551,6 +800,8 @@ class WalkerCharacter {
             guard let self = self else { return }
             self.terminalView?.endStreaming()
             self.terminalView?.appendError("\(self.provider.displayName) session ended.")
+            self.agentBusyStartTime = 0
+            self.triggerCatAnimation(.idle)
         }
 
         session.onSessionReady = { }
@@ -564,15 +815,10 @@ class WalkerCharacter {
             item.target = self
             item.attributedTitle = NSAttributedString(string: p.displayName, attributes: [.font: menuFont])
             item.representedObject = p.rawValue
-            if p == provider {
-                item.state = .on
-            }
-            if !p.isAvailable {
-                item.isEnabled = false
-            }
+            if p == provider { item.state = .on }
+            if !p.isAvailable { item.isEnabled = false }
             menu.addItem(item)
         }
-        // Show menu below the title bar area
         if let titleBar = popoverWindow?.contentView?.subviews.first(where: { $0.frame.origin.y > 0 && $0.frame.height == 28 }) {
             menu.popUp(positioning: nil, at: NSPoint(x: 10, y: 0), in: titleBar)
         }
@@ -583,7 +829,6 @@ class WalkerCharacter {
               let newProvider = AgentProvider(rawValue: raw),
               newProvider != provider else { return }
         provider = newProvider
-        // Terminate existing session and rebuild popover for new provider
         session?.terminate()
         session = nil
         popoverWindow?.orderOut(nil)
@@ -617,7 +862,7 @@ class WalkerCharacter {
         let charFrame = window.frame
         let popoverSize = popover.frame.size
         var x = charFrame.midX - popoverSize.width / 2
-        let y = charFrame.maxY - 15
+        let y = charFrame.maxY - 15 - popoverSize.height * 0.20
 
         let screenFrame = screen.frame
         x = max(screenFrame.minX + 4, min(x, screenFrame.maxX - popoverSize.width - 4))
@@ -729,7 +974,7 @@ class WalkerCharacter {
 
         let charFrame = window.frame
         let x = charFrame.midX - bubbleW / 2
-        let y = charFrame.origin.y + charFrame.height * 0.88
+        let y = charFrame.origin.y + charFrame.height * 0.68
         thinkingBubbleWindow?.setFrame(CGRect(x: x, y: y, width: bubbleW, height: h), display: false)
 
         let borderColor = isCompletion ? t.bubbleCompletionBorder.cgColor : t.bubbleBorder.cgColor
@@ -863,7 +1108,6 @@ class WalkerCharacter {
         }
 
         walkStartPos = positionProgress
-        // Walk a fixed pixel distance (~200-325px) regardless of screen width.
         let referenceWidth: CGFloat = 500.0
         let walkPixels = CGFloat.random(in: walkAmountRange) * referenceWidth
         let walkAmount = currentTravelDistance > 0 ? walkPixels / currentTravelDistance : 0.3
@@ -872,7 +1116,6 @@ class WalkerCharacter {
         } else {
             walkEndPos = max(walkStartPos - walkAmount, 0.0)
         }
-        // Store pixel positions so walk speed stays consistent if screen changes mid-walk
         walkStartPixel = walkStartPos * currentTravelDistance
         walkEndPixel = walkEndPos * currentTravelDistance
 
@@ -891,15 +1134,22 @@ class WalkerCharacter {
         }
 
         updateFlip()
-        queuePlayer.seek(to: .zero)
-        queuePlayer.play()
+        if riveViewModel != nil {
+            rivePlay()
+        } else {
+            queuePlayer?.seek(to: .zero)
+            queuePlayer?.play()
+        }
     }
 
     func enterPause() {
         isWalking = false
         isPaused = true
-        queuePlayer.pause()
-        queuePlayer.seek(to: .zero)
+        if riveViewModel == nil {
+            queuePlayer?.pause()
+            queuePlayer?.seek(to: .zero)
+        }
+        // Rive continues its idle animation during pause — no need to stop it
         let delay = Double.random(in: 5.0...12.0)
         pauseEndTime = CACurrentMediaTime() + delay
     }
@@ -907,12 +1157,14 @@ class WalkerCharacter {
     func updateFlip() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        if goingRight {
-            playerLayer.transform = CATransform3DIdentity
+        let transform = goingRight ? CATransform3DIdentity : CATransform3DMakeScale(-1, 1, 1)
+        if let rv = riveContentView {
+            rv.layer?.transform = transform
+            rv.layer?.frame = CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight)
         } else {
-            playerLayer.transform = CATransform3DMakeScale(-1, 1, 1)
+            playerLayer?.transform = transform
+            playerLayer?.frame = CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight)
         }
-        playerLayer.frame = CGRect(x: 0, y: 0, width: displayWidth, height: displayHeight)
         CATransaction.commit()
     }
 
@@ -949,6 +1201,33 @@ class WalkerCharacter {
 
     func update(dockX: CGFloat, dockWidth: CGFloat, dockTopY: CGFloat) {
         currentTravelDistance = max(dockWidth - displayWidth, 0)
+
+        guard riveViewModel != nil else { return }
+        let now = CACurrentMediaTime()
+        let idleTime = now - lastActivityTime
+        let sessionTime = now - sessionStartTime
+        let busyDuration = (isAgentBusy && agentBusyStartTime > 0) ? now - agentBusyStartTime : 0
+
+        if !isIdleForPopover {
+            if sessionTime > cryAfterSeconds {
+                triggerCatAnimation(.crying)
+            } else if isAgentBusy && busyDuration > deepThinkAfterSeconds {
+                triggerCatAnimation(.deepThinking)
+            } else if isAgentBusy {
+                if currentCatState != .thinking && currentCatState != .deepThinking {
+                    triggerCatAnimation(.thinking)
+                }
+            } else if idleTime > sleepAfterSeconds {
+                triggerCatAnimation(.sleeping)
+            } else if idleTime > sleepyAfterSeconds {
+                triggerCatAnimation(.sleepy)
+            } else if sessionTime > coffeeAfterSeconds && currentCatState == .idle {
+                triggerCatAnimation(.drinkingCoffee)
+            } else if !isAgentBusy && (currentCatState == .sleeping || currentCatState == .sleepy) && idleTime < sleepyAfterSeconds {
+                triggerCatAnimation(.idle)
+            }
+        }
+
         if isIdleForPopover {
             let travelDistance = currentTravelDistance
             let x = dockX + travelDistance * positionProgress + currentFlipCompensation
@@ -960,10 +1239,8 @@ class WalkerCharacter {
             return
         }
 
-        let now = CACurrentMediaTime()
-
         if isPaused {
-            if now >= pauseEndTime {
+            if walksEnabled && now >= pauseEndTime {
                 startWalk()
             } else {
                 let travelDistance = max(dockWidth - displayWidth, 0)
@@ -980,11 +1257,9 @@ class WalkerCharacter {
             let videoTime = min(elapsed, videoDuration)
             let travelDistance = currentTravelDistance
 
-            // Interpolate in pixel space for consistent speed across screen changes
             let walkNorm = elapsed >= videoDuration ? 1.0 : movementPosition(at: videoTime)
             let currentPixel = walkStartPixel + (walkEndPixel - walkStartPixel) * walkNorm
 
-            // Convert pixel position back to progress for the current screen
             if travelDistance > 0 {
                 positionProgress = min(max(currentPixel / travelDistance, 0), 1)
             }
@@ -1003,4 +1278,5 @@ class WalkerCharacter {
 
         updateThinkingBubble()
     }
+
 }
