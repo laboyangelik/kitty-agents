@@ -27,10 +27,10 @@ Supports **Claude Code**, **OpenAI Codex**, **GitHub Copilot**, and **Google Gem
 - macOS Sonoma (14.0+)
 - Apple Silicon or Intel Mac
 - At least one CLI installed:
-  - [Claude Code](https://claude.ai/download) — `curl -fsSL https://claude.ai/install.sh | sh`
-  - [OpenAI Codex](https://github.com/openai/codex) — `npm install -g @openai/codex`
-  - [GitHub Copilot](https://github.com/github/copilot-cli) — `brew install copilot-cli`
-  - [Google Gemini CLI](https://github.com/google-gemini/gemini-cli) — `npm install -g @google/gemini-cli`
+  - [Claude Code](https://claude.ai/download)
+  - [OpenAI Codex](https://github.com/openai/codex) 
+  - [GitHub Copilot](https://github.com/github/copilot-cli) 
+  - [Google Gemini CLI](https://github.com/google-gemini/gemini-cli)
 
 ## building
 
