@@ -1,4 +1,4 @@
-# lil agents
+# kitty agents
 
 ![lil agents](hero-thumbnail.png)
 
