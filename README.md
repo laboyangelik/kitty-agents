@@ -2,29 +2,24 @@
 
 ![lil agents](hero-thumbnail.png)
 
-A tiny AI cat that lives on your macOS dock.
+A tiny AI cat that lives on your macOS dock. Built on top of [lil agents](https://github.com/ryanstephen/lil-agents) by [@ryanstephen](https://github.com/ryanstephen) — go give that repo a star and using the cat animation from [Cat Pomodoro](https://rive.app/marketplace/27136-51126-cat-pomodoro/) on Rive Marketplace.
 
-**Pixel** sits above your dock, vibing. Click to open an AI terminal and chat. She thinks, she idles, she judges you silently.
+**kitty agents** sits above your dock, vibing. Click to open an AI terminal and chat. They think, they idle, and they silently judge you.
 
 Supports **Claude Code**, **OpenAI Codex**, **GitHub Copilot**, and **Google Gemini** CLIs — switch between them from the menu bar.
 
 ---
 
-> built on top of [lil agents](https://github.com/ryanstephen/lil-agents) by [@ryanstephen](https://github.com/ryanstephen) — go give that repo a star  
-> cat animation from [Cat Pomodoro](https://rive.app/marketplace/27136-51126-cat-pomodoro/) on Rive Marketplace
-
----
-
 ## features
 
-- Pixel the cat rendered with Rive animations
-- Click her to open an AI terminal popover
-- 7 cat colors to choose from — Gray, Ungu, Blue, Calico, Black, White, Orange
+- Renders with Rive animations
+- Click it to open an AI terminal popover
+- 7 cat colors to choose from: Gray, Ungu, Blue, Calico, Black, White, Orange
 - Switch AI providers from the menu bar
 - Thinking bubbles while your agent is working
 - Sound effects on completion
 - Launch at login
-- Triple tap Pixel to quit the app
+- Triple tap the kitty to quit the app
 - Auto-updates via Sparkle
 
 ## requirements
@@ -45,11 +40,11 @@ Clone the repo, open `lil-agents.xcodeproj` in Xcode, and hit run. That's it.
 
 Click the cat icon in your menu bar to access everything:
 
-- **Hide / Show Cat** — toggle Pixel on and off
+- **Hide / Show Cat** — toggle kitty on and off
 - **Sounds** — turn sound effects on or off
 - **Provider** — switch between Claude, Codex, Copilot, and Gemini. Only providers you have installed will be enabled. See [provider setup](#provider-setup) below
-- **Color** — pick Pixel's color: Gray, Ungu, Blue, Calico, Black, White, or Orange
-- **Display** — pin Pixel to a specific monitor if you have multiple screens
+- **Color** — pick the kitty's color: Gray, Ungu, Blue, Calico, Black, White, or Orange
+- **Display** — pin kitty to a specific monitor if you have multiple screens
 - **Launch at Login** — toggle whether the app starts automatically when you log in
 - **Check for Updates** — manually check for a new version
 - **Quit** — close the app
@@ -86,11 +81,11 @@ Once a CLI is installed and authenticated, open the menu bar → Provider and se
 
 ## quitting
 
-Triple-tap Pixel to quit the app. Or use menu bar → Quit.
+Triple-tap the kitty to quit the app. Or use menu bar → Quit.
 
 ## privacy
 
-Pixel runs entirely on your Mac and sends nothing anywhere.
+kitty agents runs entirely on your Mac and sends nothing anywhere.
 
 - **Your data stays local.** The app plays Rive animations and calculates your dock position. No personal data is collected or transmitted.
 - **AI providers.** Conversations go through the CLI you pick, running locally on your machine. lil agents does not intercept or store your chat content. What gets sent to the provider is governed by their own privacy policies.
