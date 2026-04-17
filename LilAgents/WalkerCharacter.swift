@@ -49,8 +49,8 @@ class WalkerCharacter {
     private var lastActivityTime: CFTimeInterval = CACurrentMediaTime()
     private var sessionStartTime: CFTimeInterval = CACurrentMediaTime()
     private var agentBusyStartTime: CFTimeInterval = 0
-    private let sleepyAfterSeconds:      CFTimeInterval = 1200  // 20 min idle
-    private let sleepAfterSeconds:       CFTimeInterval = 1800  // 30 min idle
+    private let sleepyAfterSeconds:      CFTimeInterval = 2400  // 40 min idle
+    private let sleepAfterSeconds:       CFTimeInterval = 3600  // 60 min idle
     private let deepThinkAfterSeconds:   CFTimeInterval = 300   // 5 min busy
     private let coffeeAfterSeconds:      CFTimeInterval = 1800  // 30 min session
     private let cryAfterSeconds:         CFTimeInterval = 7200  // 2 hr session
