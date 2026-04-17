@@ -100,6 +100,7 @@ class WalkerCharacter {
         }
     }
     var window: NSWindow!
+    private var globalMouseMonitor: Any?
     var playerLayer: AVPlayerLayer!
     var queuePlayer: AVQueuePlayer!
     var looper: AVPlayerLooper!
@@ -264,6 +265,17 @@ class WalkerCharacter {
         window.contentView = hostView
         window.orderFrontRegardless()
 
+        // Global monitor: detect clicks on the cat body even though the window ignores mouse events
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] _ in
+            guard let self = self else { return }
+            let loc = NSEvent.mouseLocation
+            guard let frame = self.window?.frame, frame.contains(loc) else { return }
+            let winPt = NSPoint(x: loc.x - frame.origin.x, y: loc.y - frame.origin.y)
+            if self.window?.contentView?.hitTest(winPt) != nil {
+                self.handleClick()
+            }
+        }
+
         // After App Launch finishes, hide fish, apply saved color, start idle cycling
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self, weak rvm] in
             if let colorAnim = self?.catColorAnimation {
@@ -284,7 +296,7 @@ class WalkerCharacter {
         win.backgroundColor = .clear
         win.hasShadow = false
         win.level = .statusBar
-        win.ignoresMouseEvents = false
+        win.ignoresMouseEvents = true  // clicks pass through to Dock; body clicks handled via global monitor
         win.collectionBehavior = [.canJoinAllSpaces, .stationary]
         return win
     }
@@ -1194,6 +1206,12 @@ class WalkerCharacter {
             return CGFloat(easeInDist + linearDist + v * (t - t * t / (2.0 * dOut)))
         } else {
             return 1.0
+        }
+    }
+
+    deinit {
+        if let monitor = globalMouseMonitor {
+            NSEvent.removeMonitor(monitor)
         }
     }
 

@@ -3,20 +3,6 @@ import AppKit
 class KeyableWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
-
-    override func sendEvent(_ event: NSEvent) {
-        if event.type == .leftMouseDown || event.type == .rightMouseDown {
-            let loc = event.locationInWindow
-            if contentView?.hitTest(loc) == nil {
-                // Click is on a transparent pixel — let it pass through to the Dock
-                ignoresMouseEvents = true
-                NSApp.postEvent(event, atStart: true)
-                DispatchQueue.main.async { [weak self] in self?.ignoresMouseEvents = false }
-                return
-            }
-        }
-        super.sendEvent(event)
-    }
 }
 
 class CharacterContentView: NSView {
