@@ -1247,6 +1247,7 @@ class WalkerCharacter {
                 let bottomPadding = displayHeight * 0.15
                 let y = dockTopY - bottomPadding + yOffset
                 window.setFrameOrigin(NSPoint(x: x, y: y))
+                updateThinkingBubble()
                 return
             }
         }
