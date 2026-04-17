@@ -138,17 +138,11 @@ class LilAgentsController {
         if pinnedScreenIndex >= 0, pinnedScreenIndex < NSScreen.screens.count {
             return NSScreen.screens[pinnedScreenIndex]
         }
-        // Prefer the screen that currently shows the dock (bottom inset in visibleFrame).
-        // NSScreen.main changes with keyboard focus and must NOT be used here — clicking a
-        // secondary display switches NSScreen.main to that display, causing characters on
-        // the dock screen to be incorrectly hidden.
-        if let dockScreen = NSScreen.screens.first(where: { screenHasDock($0) }) {
-            return dockScreen
-        }
-        // Dock is auto-hidden: fall back to the primary display, identified as the screen
-        // whose menu bar reserves space at the top (visibleFrame.maxY < frame.maxY).
-        if let primaryScreen = NSScreen.screens.first(where: { $0.visibleFrame.maxY < $0.frame.maxY }) {
-            return primaryScreen
+        // Always follow the screen macOS designated as primary — the one with the menu bar.
+        // This is stable (doesn't change with keyboard focus like NSScreen.main) and matches
+        // what the user considers "main display."
+        if let menuBarScreen = NSScreen.screens.first(where: { $0.visibleFrame.maxY < $0.frame.maxY }) {
+            return menuBarScreen
         }
         return NSScreen.screens.first
     }
@@ -161,16 +155,11 @@ class LilAgentsController {
     }
 
     private func shouldShowCharacters(on screen: NSScreen) -> Bool {
-        // User explicitly pinned to this screen — always show
         if pinnedScreenIndex >= 0, pinnedScreenIndex < NSScreen.screens.count {
             return true
         }
-        return DockVisibility.shouldShowCharacters(
-            screenFrame: screen.frame,
-            visibleFrame: screen.visibleFrame,
-            isMainScreen: screen == NSScreen.main,
-            dockAutohideEnabled: dockAutohideEnabled()
-        )
+        // Always show on the primary display
+        return true
     }
 
     @discardableResult
@@ -195,15 +184,23 @@ class LilAgentsController {
         guard updateEnvironmentVisibility(for: screen) else { return }
 
         let screenWidth = screen.frame.width
-        let dockX: CGFloat
-        let dockWidth: CGFloat
         let dockTopY: CGFloat
+        let dockWidth: CGFloat
+        let dockX: CGFloat
 
-        // Dock is on this screen — constrain to dock area
-        (dockX, dockWidth) = getDockIconArea(screenWidth: screenWidth)
+        let (rawDockX, rawDockWidth) = getDockIconArea(screenWidth: screenWidth)
+        dockWidth = rawDockWidth
+        // Add screen origin for global coordinates; clamp so cat never goes off the left edge
+        dockX = max(screen.frame.origin.x, rawDockX + screen.frame.origin.x)
         dockTopY = screen.visibleFrame.origin.y
 
         updateDebugLine(dockX: dockX, dockWidth: dockWidth, dockTopY: dockTopY)
+
+        characters.forEach { char in
+            if char.isManuallyVisible && !char.window.isVisible {
+                char.window.orderFrontRegardless()
+            }
+        }
 
         let activeChars = characters.filter { $0.window.isVisible && $0.isManuallyVisible }
 

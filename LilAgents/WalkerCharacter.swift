@@ -285,7 +285,7 @@ class WalkerCharacter {
         win.hasShadow = false
         win.level = .statusBar
         win.ignoresMouseEvents = false
-        win.collectionBehavior = [.moveToActiveSpace, .stationary]
+        win.collectionBehavior = [.canJoinAllSpaces, .stationary]
         return win
     }
 
@@ -1201,7 +1201,6 @@ class WalkerCharacter {
 
     func update(dockX: CGFloat, dockWidth: CGFloat, dockTopY: CGFloat) {
         currentTravelDistance = max(dockWidth - displayWidth, 0)
-
         guard riveViewModel != nil else { return }
         let now = CACurrentMediaTime()
         let idleTime = now - lastActivityTime
