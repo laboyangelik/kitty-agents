@@ -6,5 +6,19 @@
         <description>kitty agents update feed</description>
         <language>en</language>
         <!-- Releases are added here automatically by .github/workflows/release.yml -->
+            <item>
+            <title>v1.3.0</title>
+            <description><![CDATA[<p>kitty agents 1.3.0</p>]]></description>
+            <pubDate>Tue, 21 Apr 2026 23:17:25 +0000</pubDate>
+            <sparkle:version>78</sparkle:version>
+            <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/laboyangelik/kitty-agents/releases/download/v1.3.0/kitty-agents-1.3.0.zip"
+                type="application/octet-stream"
+                sparkle:edSignature="l7gqEnV6quywDKJINYHqdZqkl2hzYIxydjgInnnKgwUA3/YACBC4duh1kt7kZU6UugOd+MqATVwvtq2VL6tzBQ=="
+                length="35854665"
+            />
+        </item>
     </channel>
 </rss>
