@@ -363,7 +363,7 @@ class WalkerCharacter {
         win.isOpaque = false
         win.backgroundColor = .clear
         win.hasShadow = false
-        win.level = .statusBar
+        win.level = .normal
         win.ignoresMouseEvents = false
         win.collectionBehavior = [.canJoinAllSpaces, .stationary]
         return win
