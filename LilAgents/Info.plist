@@ -5,9 +5,9 @@
     <key>LSUIElement</key>
     <true/>
     <key>SUFeedURL</key>
-    <string>https://raw.githubusercontent.com/ryanstephen/lil-agents/main/appcast.xml</string>
+    <string>https://raw.githubusercontent.com/laboyangelik/kitty-agents/main/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>8QOCrY3j4crgz4iR5lmxyv+rA5vnqK6Qtd1XheMllP8=</string>
+    <string>l+XLNDgndQQFXO0dv4EtKpxlVb6mMKUf2FFtpUcf8bk=</string>
     <key>SUEnableAutomaticChecks</key>
     <true/>
     <key>SUAllowsAutomaticUpdates</key>
