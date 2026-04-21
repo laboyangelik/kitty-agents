@@ -153,6 +153,7 @@ class WalkerCharacter {
     }
     var window: NSWindow!
     private var globalMouseMonitor: Any?
+    private var lastPassThroughCheck: CFTimeInterval = 0
     var playerLayer: AVPlayerLayer!
     var queuePlayer: AVQueuePlayer!
     var looper: AVPlayerLooper!
@@ -1329,7 +1330,31 @@ class WalkerCharacter {
 
     // MARK: - Frame Update
 
+    // Toggle ignoresMouseEvents based on whether the cursor is over visible cat pixels.
+    // Transparent padding becomes click-through to Finder/Dock/apps beneath; cat body
+    // absorbs the click so the popover opens without also activating the app below.
+    private func updateClickPassThrough() {
+        guard let win = window, win.isVisible else { return }
+        let now = CACurrentMediaTime()
+        if now - lastPassThroughCheck < 0.05 { return }
+        lastPassThroughCheck = now
+
+        let loc = NSEvent.mouseLocation
+        let frame = win.frame
+        let desired: Bool
+        if !frame.contains(loc) {
+            desired = true
+        } else {
+            let winPt = NSPoint(x: loc.x - frame.origin.x, y: loc.y - frame.origin.y)
+            desired = (win.contentView?.hitTest(winPt) == nil)
+        }
+        if win.ignoresMouseEvents != desired {
+            win.ignoresMouseEvents = desired
+        }
+    }
+
     func update(dockX: CGFloat, dockWidth: CGFloat, dockTopY: CGFloat) {
+        updateClickPassThrough()
         currentTravelDistance = max(dockWidth - displayWidth, 0)
         guard riveViewModel != nil else { return }
         let now = CACurrentMediaTime()
