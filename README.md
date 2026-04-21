@@ -21,6 +21,13 @@ Supports **Claude Code**, **OpenAI Codex**, **GitHub Copilot**, **Google Gemini*
 
 The app updates itself automatically in the background via Sparkle — you'll get a prompt whenever a new version is ready.
 
+## requirements
+
+- macOS Sonoma 14.0 or later
+- Apple Silicon or Intel Mac
+
+At least one AI provider — Claude, Codex, Gemini, Copilot, OpenCode, or OpenClaw. The app will detect what you have installed automatically, and can walk you through installing Claude, Codex, or Gemini from inside the chat.
+
 ---
 
 ## features
@@ -93,15 +100,6 @@ Click the cat icon in the menu bar to access:
 - **Launch at Login** — start automatically on login
 - **Check for Updates** — manually check for a new version
 - **Quit** — close the app
-
----
-
-## requirements
-
-- macOS Sonoma 14.0 or later
-- Apple Silicon or Intel Mac
-
-At least one AI provider — Claude, Codex, Gemini, Copilot, OpenCode, or OpenClaw. The app will detect what you have installed automatically, and can walk you through installing Claude, Codex, or Gemini from inside the chat.
 
 ---
 
