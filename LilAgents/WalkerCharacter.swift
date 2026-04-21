@@ -2,6 +2,47 @@ import AVFoundation
 import AppKit
 import RiveRuntime
 
+private class ResizeHandleView: NSView {
+    private var startWindowFrame: NSRect = .zero
+    private var startMouseLocation: NSPoint = .zero
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .crosshair)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        ctx.setFillColor(NSColor.white.withAlphaComponent(0.25).cgColor)
+        let dotSize: CGFloat = 2
+        let gap: CGFloat = 3
+        for i in 0..<3 {
+            let offset = CGFloat(i) * (dotSize + gap)
+            let x = bounds.maxX - 4 - offset
+            let y = bounds.minY + 4 + offset
+            ctx.fillEllipse(in: CGRect(x: x - dotSize/2, y: y - dotSize/2, width: dotSize, height: dotSize))
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard let window = window else { return }
+        startWindowFrame = window.frame
+        startMouseLocation = NSEvent.mouseLocation
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let window = window else { return }
+        let current = NSEvent.mouseLocation
+        let dx = current.x - startMouseLocation.x
+        let dy = current.y - startMouseLocation.y
+        var frame = startWindowFrame
+        frame.size.width = max(300, frame.size.width + dx)
+        let newHeight = max(200, frame.size.height - dy)
+        frame.origin.y = frame.origin.y + frame.size.height - newHeight
+        frame.size.height = newHeight
+        window.setFrame(frame, display: true)
+    }
+}
+
 enum CharacterSize: String, CaseIterable {
     case large, medium, small
     var height: CGFloat {
@@ -89,6 +130,17 @@ class WalkerCharacter {
             UserDefaults.standard.set(newValue.rawValue, forKey: "\(name)Provider")
         }
     }
+    var claudeModel: String {
+        get { UserDefaults.standard.string(forKey: "\(name)ClaudeModel") ?? "claude-sonnet-4-6" }
+        set { UserDefaults.standard.set(newValue, forKey: "\(name)ClaudeModel") }
+    }
+
+    private func makeSession() -> any AgentSession {
+        let s = provider.createSession()
+        if let cs = s as? ClaudeSession { cs.model = claudeModel }
+        return s
+    }
+
     var size: CharacterSize {
         get {
             let raw = UserDefaults.standard.string(forKey: "\(name)Size") ?? "big"
@@ -265,17 +317,6 @@ class WalkerCharacter {
         window.contentView = hostView
         window.orderFrontRegardless()
 
-        // Global monitor: detect clicks on the cat body even though the window ignores mouse events
-        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] _ in
-            guard let self = self else { return }
-            let loc = NSEvent.mouseLocation
-            guard let frame = self.window?.frame, frame.contains(loc) else { return }
-            let winPt = NSPoint(x: loc.x - frame.origin.x, y: loc.y - frame.origin.y)
-            if self.window?.contentView?.hitTest(winPt) != nil {
-                self.handleClick()
-            }
-        }
-
         // After App Launch finishes, hide fish, apply saved color, start idle cycling
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self, weak rvm] in
             if let colorAnim = self?.catColorAnimation {
@@ -296,7 +337,7 @@ class WalkerCharacter {
         win.backgroundColor = .clear
         win.hasShadow = false
         win.level = .statusBar
-        win.ignoresMouseEvents = true  // clicks pass through to Dock; body clicks handled via global monitor
+        win.ignoresMouseEvents = false
         win.collectionBehavior = [.canJoinAllSpaces, .stationary]
         return win
     }
@@ -417,10 +458,7 @@ class WalkerCharacter {
         if isIdleForPopover && wasPopoverVisibleBeforeEnvironmentHide {
             updatePopoverPosition()
             popoverWindow?.orderFrontRegardless()
-            popoverWindow?.makeKey()
-            if let terminal = terminalView {
-                popoverWindow?.makeFirstResponder(terminal.inputField)
-            }
+            popoverWindow?.makeFirstResponder(terminalView?.inputField)
         }
 
         if wasBubbleVisibleBeforeEnvironmentHide {
@@ -556,7 +594,7 @@ class WalkerCharacter {
         hideBubble()
 
         if session == nil {
-            let newSession = provider.createSession()
+            let newSession = makeSession()
             session = newSession
             wireSession(newSession)
             newSession.start()
@@ -572,29 +610,28 @@ class WalkerCharacter {
 
         updatePopoverPosition()
         popoverWindow?.orderFrontRegardless()
-        popoverWindow?.makeKey()
 
-        if let terminal = terminalView {
-            popoverWindow?.makeFirstResponder(terminal.inputField)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            guard let self = self, let win = self.popoverWindow else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            win.makeKeyAndOrderFront(nil)
+            win.makeFirstResponder(self.terminalView?.inputField)
         }
 
         removeEventMonitors()
 
-        clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-            guard let self = self, let popover = self.popoverWindow else { return }
-            let popoverFrame = popover.frame
-            let charFrame = self.window.frame
-            if !popoverFrame.contains(NSEvent.mouseLocation) && !charFrame.contains(NSEvent.mouseLocation) {
+        escapeKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, event.keyCode == 53 else { return event }
+            if self.isAgentBusy {
+                self.session?.cancelCurrentTurn()
+                self.terminalView?.endStreaming()
+                self.terminalView?.appendError("  cancelled\n")
+                self.agentBusyStartTime = 0
+                self.triggerCatAnimation(.focusing)
+            } else {
                 self.closePopover()
             }
-        }
-
-        escapeKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 {
-                self?.closePopover()
-                return nil
-            }
-            return event
+            return nil
         }
     }
 
@@ -657,7 +694,8 @@ class WalkerCharacter {
         win.isOpaque = false
         win.backgroundColor = .clear
         win.hasShadow = true
-        win.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 10)
+        win.level = .normal
+        win.isMovable = false
         win.collectionBehavior = [.moveToActiveSpace, .stationary]
         let brightness = t.popoverBg.redComponent * 0.299 + t.popoverBg.greenComponent * 0.587 + t.popoverBg.blueComponent * 0.114
         win.appearance = NSAppearance(named: brightness < 0.5 ? .darkAqua : .aqua)
@@ -699,6 +737,16 @@ class WalkerCharacter {
         clickArea.action = #selector(showProviderMenu(_:))
         titleBar.addSubview(clickArea)
 
+        let toolsBtn = NSButton(frame: NSRect(x: popoverWidth - 68, y: 5, width: 16, height: 16))
+        toolsBtn.image = NSImage(systemSymbolName: "hammer", accessibilityDescription: "Commands")
+        toolsBtn.imageScaling = .scaleProportionallyDown
+        toolsBtn.bezelStyle = .inline
+        toolsBtn.isBordered = false
+        toolsBtn.contentTintColor = t.titleText.withAlphaComponent(0.75)
+        toolsBtn.target = self
+        toolsBtn.action = #selector(showCommandsMenu(_:))
+        titleBar.addSubview(toolsBtn)
+
         let refreshBtn = NSButton(frame: NSRect(x: popoverWidth - 48, y: 5, width: 16, height: 16))
         refreshBtn.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "Refresh")
         refreshBtn.imageScaling = .scaleProportionallyDown
@@ -728,17 +776,30 @@ class WalkerCharacter {
         terminal.characterColor = characterColor
         terminal.themeOverride = themeOverride
         terminal.provider = provider
+        terminal.currentModel = claudeModel
         terminal.autoresizingMask = [.width, .height]
         terminal.onSendMessage = { [weak self] message in
             guard let self = self else { return }
             self.lastActivityTime = CACurrentMediaTime()
             self.agentBusyStartTime = 0
+            self.currentCatState = .focusing  // reset so .thinking always re-triggers below
+            self.triggerCatAnimation(.thinking)
             self.session?.send(message: message)
         }
         terminal.onClearRequested = { [weak self] in
             self?.resetSession()
         }
+        terminal.onModelChange = { [weak self] model in
+            guard let self = self else { return }
+            self.claudeModel = model
+            self.resetSession()
+        }
         container.addSubview(terminal)
+
+        let handleSize: CGFloat = 18
+        let resizeHandle = ResizeHandleView(frame: NSRect(x: popoverWidth - handleSize, y: 0, width: handleSize, height: handleSize))
+        resizeHandle.autoresizingMask = [.minXMargin, .maxYMargin]
+        container.addSubview(resizeHandle)
 
         win.contentView = container
         popoverWindow = win
@@ -755,7 +816,7 @@ class WalkerCharacter {
         hideBubble()
         terminalView?.resetState()
         terminalView?.showSessionMessage()
-        let newSession = provider.createSession()
+        let newSession = makeSession()
         session = newSession
         wireSession(newSession)
         newSession.start()
@@ -769,7 +830,6 @@ class WalkerCharacter {
             self.terminalView?.appendStreamingText(text)
             if self.agentBusyStartTime == 0 {
                 self.agentBusyStartTime = CACurrentMediaTime()
-                self.triggerCatAnimation(.thinking)
             }
         }
 
@@ -800,7 +860,6 @@ class WalkerCharacter {
             self.terminalView?.appendToolUse(toolName: toolName, summary: summary)
             if self.agentBusyStartTime == 0 {
                 self.agentBusyStartTime = CACurrentMediaTime()
-                self.triggerCatAnimation(.thinking)
             }
         }
 
@@ -858,6 +917,59 @@ class WalkerCharacter {
     @objc func refreshSessionFromButton() {
         guard !isOnboarding else { return }
         resetSession()
+    }
+
+    @objc func showCommandsMenu(_ sender: NSButton) {
+        let menu = NSMenu()
+        menu.font = NSFont.systemFont(ofSize: 13)
+
+        let header = NSMenuItem(title: "Slash Commands", action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(header)
+        menu.addItem(.separator())
+
+        let entries: [(cmd: String, desc: String, action: String?)] = [
+            ("/clear",        "clear chat history",          "/clear"),
+            ("/copy",         "copy last response",          "/copy"),
+            ("/model",        "switch model  →",             nil),
+            ("/mcp",          "list MCP servers",            "/mcp"),
+        ]
+
+        for entry in entries {
+            if entry.action == nil {
+                let modelItem = NSMenuItem(title: "\(entry.cmd)  —  \(entry.desc)", action: nil, keyEquivalent: "")
+                modelItem.isEnabled = false
+                menu.addItem(modelItem)
+
+                let models: [(String, String, String)] = [
+                    ("opus",   "claude-opus-4-7",          "most capable"),
+                    ("sonnet", "claude-sonnet-4-6",        "balanced · default"),
+                    ("haiku",  "claude-haiku-4-5-20251001","fastest"),
+                ]
+                for (alias, _, desc) in models {
+                    let current = terminalView?.currentModel.contains(alias) == true
+                    let check = current ? "✓ " : "   "
+                    let item = NSMenuItem(title: "\(check)\(alias)  —  \(desc)", action: #selector(runCommandMenuItem(_:)), keyEquivalent: "")
+                    item.representedObject = "/model \(alias)"
+                    item.target = self
+                    item.indentationLevel = 1
+                    menu.addItem(item)
+                }
+            } else {
+                let item = NSMenuItem(title: "\(entry.cmd)  —  \(entry.desc)", action: #selector(runCommandMenuItem(_:)), keyEquivalent: "")
+                item.representedObject = entry.action
+                item.target = self
+                menu.addItem(item)
+            }
+        }
+
+        let pt = NSPoint(x: sender.frame.minX, y: sender.frame.minY - 2)
+        menu.popUp(positioning: nil, at: pt, in: sender.superview)
+    }
+
+    @objc private func runCommandMenuItem(_ item: NSMenuItem) {
+        guard let cmd = item.representedObject as? String else { return }
+        terminalView?.handleSlashCommandPublic(cmd)
     }
 
     private func formatToolInput(_ input: [String: Any]) -> String {

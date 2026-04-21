@@ -130,6 +130,16 @@ class OpenCodeSession: AgentSession {
         isBusy = false
     }
 
+    func cancelCurrentTurn() {
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
+        process?.terminate()
+        process = nil
+        isRunning = false
+        isBusy = false
+        start()
+    }
+
     // MARK: - JSONL Parsing
 
     private func processOutput(_ text: String) {

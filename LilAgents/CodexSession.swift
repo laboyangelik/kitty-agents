@@ -129,6 +129,16 @@ class CodexSession: AgentSession {
         isBusy = false
     }
 
+    func cancelCurrentTurn() {
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
+        process?.terminate()
+        process = nil
+        isRunning = false
+        isBusy = false
+        start()
+    }
+
     // MARK: - Prompt (multi-turn without codex exec resume)
 
     private static func execPrompt(priorMessages: ArraySlice<AgentMessage>, latestUserMessage: String) -> String {

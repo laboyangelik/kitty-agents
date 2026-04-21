@@ -2,7 +2,7 @@ import AppKit
 
 class KeyableWindow: NSWindow {
     override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
+    override var canBecomeMain: Bool { false }
 }
 
 class CharacterContentView: NSView {
@@ -47,11 +47,7 @@ class CharacterContentView: NSView {
             }
         }
 
-        // Fallback: accept click if within center 60% of the view
-        let insetX = bounds.width * 0.2
-        let insetY = bounds.height * 0.15
-        let hitRect = bounds.insetBy(dx: insetX, dy: insetY)
-        return hitRect.contains(localPoint) ? self : nil
+        return nil
     }
 
     override func mouseDown(with event: NSEvent) {

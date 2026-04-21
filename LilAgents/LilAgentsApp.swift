@@ -80,6 +80,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func buildMenu() -> NSMenu {
         let menu = NSMenu()
 
+        let openChatItem = NSMenuItem(title: "Open Chat", action: #selector(openChat), keyEquivalent: "")
+        menu.addItem(openChatItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         let catVisible = controller?.characters.first?.isManuallyVisible ?? true
         let showHideItem = NSMenuItem(
             title: catVisible ? "Hide Cat" : "Show Cat",
@@ -175,6 +180,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         statusItem?.menu = menu
         return menu
+    }
+
+    @objc func openChat() {
+        guard let char = controller?.characters.first else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        if !char.isIdleForPopover {
+            char.openPopover()
+        }
     }
 
     @objc func toggleCatVisibility() {

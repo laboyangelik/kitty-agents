@@ -175,6 +175,13 @@ class OpenClawSession: AgentSession {
         onProcessExit?()
     }
 
+    func cancelCurrentTurn() {
+        webSocketTask?.cancel(with: .normalClosure, reason: nil)
+        isRunning = false
+        isBusy = false
+        start()
+    }
+
     // MARK: WebSocket Transport
 
     private func sendRequest(method: String, params: [String: Any]) {

@@ -154,4 +154,5 @@ protocol AgentSession: AnyObject {
     func start()
     func send(message: String)
     func terminate()
+    func cancelCurrentTurn()
 }

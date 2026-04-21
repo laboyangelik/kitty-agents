@@ -335,7 +335,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LilAgents/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "lil agents";
+				INFOPLIST_KEY_CFBundleDisplayName = "kitty agents";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSMainNibFile = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -345,7 +345,7 @@
 				);
 				MARKETING_VERSION = 1.2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lilagents.app;
-				PRODUCT_NAME = "lil agents";
+				PRODUCT_NAME = "kitty agents";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -363,7 +363,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = LilAgents/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "lil agents";
+				INFOPLIST_KEY_CFBundleDisplayName = "kitty agents";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSMainNibFile = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -374,7 +374,7 @@
 				MARKETING_VERSION = 1.2.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = com.lilagents.app;
-				PRODUCT_NAME = "lil agents";
+				PRODUCT_NAME = "kitty agents";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 			};

@@ -11,6 +11,7 @@ class ClaudeSession: AgentSession {
     private(set) var isRunning = false
     private(set) var isBusy = false
     private static var binaryPath: String?
+    var model: String = "claude-sonnet-4-6"
 
     var onText: ((String) -> Void)?
     var onError: ((String) -> Void)?
@@ -56,7 +57,8 @@ class ClaudeSession: AgentSession {
             "--output-format", "stream-json",
             "--input-format", "stream-json",
             "--verbose",
-            "--dangerously-skip-permissions"
+            "--dangerously-skip-permissions",
+            "--model", model
         ]
         proc.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
         proc.environment = ShellEnvironment.processEnvironment()
@@ -152,6 +154,22 @@ class ClaudeSession: AgentSession {
         isRunning = false
         isBusy = false
         pendingMessages.removeAll()
+    }
+
+    func cancelCurrentTurn() {
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
+        process?.terminate()
+        process = nil
+        inputPipe = nil
+        outputPipe = nil
+        errorPipe = nil
+        isRunning = false
+        isBusy = false
+        lineBuffer = ""
+        currentResponseText = ""
+        pendingMessages.removeAll()
+        start()
     }
 
     // MARK: - NDJSON Parsing

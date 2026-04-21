@@ -174,6 +174,16 @@ class GeminiSession: AgentSession {
         isBusy = false
     }
 
+    func cancelCurrentTurn() {
+        outputPipe?.fileHandleForReading.readabilityHandler = nil
+        errorPipe?.fileHandleForReading.readabilityHandler = nil
+        process?.terminate()
+        process = nil
+        isRunning = false
+        isBusy = false
+        start()
+    }
+
     // MARK: - Output Parsing
 
     // Gemini CLI may emit JSONL or plain text depending on version/flags.
