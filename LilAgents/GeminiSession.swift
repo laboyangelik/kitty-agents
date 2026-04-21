@@ -10,9 +10,15 @@ class GeminiSession: AgentSession {
     private(set) var isBusy = false
     private var isFirstTurn = true
     private static var binaryPath: String?
+    var model: String = "gemini-2.5-flash"
+
+    static func clearBinaryCache() {
+        binaryPath = nil
+    }
 
     var onText: ((String) -> Void)?
     var onError: ((String) -> Void)?
+    var onNotice: ((String) -> Void)?
     var onToolUse: ((String, [String: Any]) -> Void)?
     var onToolResult: ((String, Bool) -> Void)?
     var onSessionReady: (() -> Void)?
@@ -20,6 +26,83 @@ class GeminiSession: AgentSession {
     var onProcessExit: (() -> Void)?
 
     var history: [AgentMessage] = []
+
+    // MARK: - Prompt Building
+
+    private static func buildPromptWithHistory(priorMessages: ArraySlice<AgentMessage>, latestUserMessage: String) -> String {
+        let conversationalPrior = priorMessages.filter { m in
+            m.role == .user || m.role == .assistant
+        }
+        guard !conversationalPrior.isEmpty else { return latestUserMessage }
+
+        var parts: [String] = []
+        for m in conversationalPrior {
+            switch m.role {
+            case .user:      parts.append("User: \(m.text)")
+            case .assistant: parts.append("Assistant: \(m.text)")
+            default: break
+            }
+        }
+        return """
+        Here is our conversation so far (for your context). Respond only to the final follow-up at the bottom — do not re-answer earlier messages.
+
+        \(parts.joined(separator: "\n\n"))
+
+        ---
+
+        User's follow-up: \(latestUserMessage)
+        """
+    }
+
+    // MARK: - Error Diagnostics
+
+    static func diagnose(stderr: String, status: Int32) -> String {
+        let lower = stderr.lowercased()
+
+        // Quota / rate limit
+        if lower.contains("quota") || lower.contains("rate limit") || lower.contains("429") {
+            return "looks like you've used up Gemini's free credits for the day. try again tomorrow, or add a paid plan at [aistudio.google.com](https://aistudio.google.com)."
+        }
+        // Auth / invalid key
+        if lower.contains("api_key_invalid") || lower.contains("invalid api key")
+            || lower.contains("401") || lower.contains("403")
+            || lower.contains("permission_denied") || lower.contains("unauthorized") {
+            return "your Google key didn't work. click the **install Gemini** button up top to set it up again with a fresh key."
+        }
+        // API not enabled (common with Cloud project keys)
+        if lower.contains("api has not been used") || lower.contains("service_disabled")
+            || lower.contains("generative language api") {
+            return "this key is from a different kind of Google account that doesn't have Gemini turned on. click the **install Gemini** button up top and grab a fresh key from Google AI Studio — those work right out of the box."
+        }
+        // Model not found / unsupported
+        if lower.contains("model not found") || lower.contains("does not exist") || lower.contains("not supported") {
+            return "Gemini needs an update. click the **install Gemini** button up top to reinstall the latest version."
+        }
+        // Region restriction
+        if lower.contains("location is not supported") || lower.contains("region") {
+            return "Gemini isn't available in your region yet. Google's working on it."
+        }
+        // Talking to Gemini API (generic network/API failure)
+        if lower.contains("error when talking to gemini api") || lower.contains("network") {
+            return "Gemini couldn't reach the internet. check your connection and try again in a minute."
+        }
+        // Fallback — keep it short and offer the install button
+        return "something went wrong while talking to Gemini. try again in a minute — if it keeps happening, click the **install Gemini** button up top to reset your API key."
+    }
+
+    // MARK: - Workspace
+
+    /// Returns a dedicated folder Gemini can safely scan without hitting
+    /// restricted locations like ~/.Trash. Creates it if it doesn't exist.
+    static func ensureWorkspaceDirectory() -> URL {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser
+        let workspace = home.appendingPathComponent("Documents/kitty-agents-workspace", isDirectory: true)
+        if !fm.fileExists(atPath: workspace.path) {
+            try? fm.createDirectory(at: workspace, withIntermediateDirectories: true)
+        }
+        return workspace
+    }
 
     // MARK: - Lifecycle
 
@@ -43,9 +126,9 @@ class GeminiSession: AgentSession {
                 self.isRunning = true
                 self.onSessionReady?()
             } else {
-                let msg = "Gemini CLI not found.\n\n\(AgentProvider.gemini.installInstructions)"
-                self.onError?(msg)
-                self.history.append(AgentMessage(role: .error, text: msg))
+                let msg = "hey! it looks like you don't have Gemini installed yet. \(AgentProvider.gemini.installInstructions)"
+                self.onNotice?(msg)
+                self.history.append(AgentMessage(role: .notice, text: msg))
             }
         }
     }
@@ -60,19 +143,25 @@ class GeminiSession: AgentSession {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: binaryPath)
 
-        // gemini --yolo -p "message" for agentic use
-        // --resume latest for subsequent turns
-        var args: [String] = ["--yolo", "-p", message]
-        if !isFirstTurn {
-            args = ["--yolo", "--resume", "latest", "-p", message]
-        }
-        proc.arguments = args
+        // Gemini CLI's -p mode is one-shot; --resume doesn't actually preserve
+        // context between -p invocations. Embed the prior history in the prompt
+        // so each turn has full conversation context.
+        let fullPrompt = GeminiSession.buildPromptWithHistory(
+            priorMessages: history.dropLast(),
+            latestUserMessage: message
+        )
+        proc.arguments = ["--yolo", "--model", model, "-p", fullPrompt]
 
-        proc.currentDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
-        proc.environment = ShellEnvironment.processEnvironment(extraPaths: [
+        proc.currentDirectoryURL = GeminiSession.ensureWorkspaceDirectory()
+        var env = ShellEnvironment.processEnvironment(extraPaths: [
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".npm-global/bin").path,
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/bin").path
         ])
+        if let apiKey = InstallFlow.storedApiKey(for: .gemini) {
+            env["GEMINI_API_KEY"] = apiKey
+            env["GOOGLE_API_KEY"] = apiKey
+        }
+        proc.environment = env
 
         let outPipe = Pipe()
         let errPipe = Pipe()
@@ -80,8 +169,10 @@ class GeminiSession: AgentSession {
         proc.standardError = errPipe
 
         var collectedText = ""
+        var collectedStderr = ""
 
-        proc.terminationHandler = { [weak self] _ in
+        proc.terminationHandler = { [weak self] p in
+            let status = p.terminationStatus
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.process = nil
@@ -107,6 +198,18 @@ class GeminiSession: AgentSession {
                     self.history.append(AgentMessage(role: .assistant, text: self.currentResponseText))
                 }
 
+                // Surface the actual reason if nothing came back
+                let gotAnyResponse = !self.currentResponseText.isEmpty || !text.isEmpty
+                if status != 0 && !gotAnyResponse {
+                    let hint = GeminiSession.diagnose(stderr: collectedStderr, status: status)
+                    self.onNotice?(hint)
+                    self.history.append(AgentMessage(role: .notice, text: hint))
+                } else if gotAnyResponse {
+                    // Only mark first-turn as done if we actually got a real response,
+                    // so subsequent sends don't try to --resume a session that never existed
+                    self.isFirstTurn = false
+                }
+
                 if self.isBusy {
                     self.isBusy = false
                     self.onTurnComplete?()
@@ -128,26 +231,14 @@ class GeminiSession: AgentSession {
         }
 
         errPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            _ = self
             let data = handle.availableData
             guard !data.isEmpty else { return }
-            // Gemini CLI may write progress/status to stderr — filter noise
+            // Collect stderr silently — it's used only if the process exits non-zero.
+            // Gemini CLI writes chatty startup noise here ("YOLO mode enabled", key-in-use
+            // notices, etc.) that shouldn't flash red in the chat on successful runs.
             if let text = String(data: data, encoding: .utf8) {
-                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                // Only surface actual errors, not progress indicators
-                let isProgressNoise = trimmed.hasPrefix("✓") || trimmed.hasPrefix("→") ||
-                                      trimmed.hasPrefix("◆") || trimmed.hasPrefix("⠋") ||
-                                      trimmed.hasPrefix("⠙") || trimmed.hasPrefix("⠹") ||
-                                      trimmed.hasPrefix("⠸") || trimmed.hasPrefix("⠼") ||
-                                      trimmed.hasPrefix("⠴") || trimmed.hasPrefix("⠦") ||
-                                      trimmed.hasPrefix("⠧") || trimmed.hasPrefix("⠇") ||
-                                      trimmed.hasPrefix("⠏") || trimmed.isEmpty
-                // Also ignore keytar errors which are common in some environments
-                let isKeytarError = text.contains("Keychain initialization encountered an error")
-                if !isProgressNoise && !isKeytarError {
-                    DispatchQueue.main.async {
-                        self?.onError?(text)
-                    }
-                }
+                DispatchQueue.main.async { collectedStderr += text }
             }
         }
 
@@ -156,7 +247,6 @@ class GeminiSession: AgentSession {
             process = proc
             outputPipe = outPipe
             errorPipe = errPipe
-            isFirstTurn = false
         } catch {
             isBusy = false
             let msg = "Failed to launch Gemini CLI: \(error.localizedDescription)"

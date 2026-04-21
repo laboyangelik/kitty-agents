@@ -93,18 +93,14 @@ enum AgentProvider: String, CaseIterable {
 
     var installInstructions: String {
         switch self {
-        case .claude:
-            return "To install, run this in Terminal:\n  curl -fsSL https://claude.ai/install.sh | sh\n\nOr download from https://claude.ai/download"
-        case .codex:
-            return "To install, run this in Terminal:\n  npm install -g @openai/codex"
+        case .claude, .codex, .gemini:
+            return "no worries — click the **install \(displayName)** button up top (right next to the hammer icon) and i'll walk you through making an account and setting everything up, right here in the chat."
         case .copilot:
-            return "To install, run this in Terminal:\n  brew install copilot-cli\n\nOr: npm install -g @github/copilot-cli"
-        case .gemini:
-            return "To install, run this in Terminal:\n  npm install -g @google/gemini-cli\n\nThen authenticate:\n  gemini auth"
+            return "to get Copilot on your computer, open the Terminal app on your Mac, paste one of these lines, and press enter:\n\n  brew install copilot-cli\n\nor, if you have Node.js installed:\n\n  npm install -g @github/copilot-cli\n\nthen come back here and we'll pick up where we left off."
         case .opencode:
-            return "To install, run this in Terminal:\n  curl -fsSL https://opencode.ai/install | bash"
+            return "to get OpenCode on your computer, open the Terminal app on your Mac, paste this line, and press enter:\n\n  curl -fsSL https://opencode.ai/install | bash\n\nthen come back here and we'll pick up where we left off."
         case .openclaw:
-            return "OpenClaw is a self-hosted AI gateway.\n\nInstall: npm install -g openclaw\nStart:   openclaw gateway run\n\nDocs: https://docs.openclaw.ai"
+            return "OpenClaw is a self-hosted AI gateway — it lets you connect me to your own AI server. to set it up, open the Terminal app on your Mac, paste these two lines one at a time, and press enter after each:\n\n  npm install -g openclaw\n  openclaw gateway run\n\nyou can find more details at https://docs.openclaw.ai"
         }
     }
 
@@ -131,7 +127,7 @@ enum TitleFormat {
 // MARK: - Message
 
 struct AgentMessage {
-    enum Role { case user, assistant, error, toolUse, toolResult }
+    enum Role { case user, assistant, error, notice, toolUse, toolResult }
     let role: Role
     let text: String
 }
@@ -145,6 +141,7 @@ protocol AgentSession: AnyObject {
 
     var onText: ((String) -> Void)? { get set }
     var onError: ((String) -> Void)? { get set }
+    var onNotice: ((String) -> Void)? { get set }
     var onToolUse: ((String, [String: Any]) -> Void)? { get set }
     var onToolResult: ((String, Bool) -> Void)? { get set }
     var onSessionReady: (() -> Void)? { get set }

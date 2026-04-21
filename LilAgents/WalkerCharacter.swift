@@ -135,9 +135,32 @@ class WalkerCharacter {
         set { UserDefaults.standard.set(newValue, forKey: "\(name)ClaudeModel") }
     }
 
+    var geminiModel: String {
+        get { UserDefaults.standard.string(forKey: "\(name)GeminiModel") ?? "gemini-2.5-flash" }
+        set { UserDefaults.standard.set(newValue, forKey: "\(name)GeminiModel") }
+    }
+
+    /// Model identifier for the currently selected provider (if any).
+    var currentProviderModel: String {
+        switch provider {
+        case .claude: return claudeModel
+        case .gemini: return geminiModel
+        default: return ""
+        }
+    }
+
+    func setModelForCurrentProvider(_ full: String) {
+        switch provider {
+        case .claude: claudeModel = full
+        case .gemini: geminiModel = full
+        default: return
+        }
+    }
+
     private func makeSession() -> any AgentSession {
         let s = provider.createSession()
         if let cs = s as? ClaudeSession { cs.model = claudeModel }
+        if let gs = s as? GeminiSession { gs.model = geminiModel }
         return s
     }
 
@@ -188,6 +211,9 @@ class WalkerCharacter {
 
     var walksEnabled = true
     var isOnboarding = false
+    private var welcomeShownInPopover = false
+    var currentInstallFlow: InstallFlow?
+    private weak var installButton: NSButton?
     private var clickCount = 0
     private var lastClickTime: CFTimeInterval = 0
     private var isQuitting = false
@@ -425,6 +451,20 @@ class WalkerCharacter {
         }
     }
 
+    func greetAfterReopen() {
+        guard !isManuallyVisible else { return }
+        setManuallyVisible(true)
+        if riveViewModel != nil { rivePlay() }
+        triggerCatAnimation(.idle)
+        isQuitting = false
+        clickCount = 0
+        showingCompletion = true
+        currentPhrase = "hi!"
+        completionBubbleExpiry = CACurrentMediaTime() + 3.0
+        showBubble(text: "hi!", isCompletion: true)
+        playCompletionSound()
+    }
+
     func hideForEnvironment() {
         guard environmentHiddenAt == nil else { return }
 
@@ -487,10 +527,6 @@ class WalkerCharacter {
         }
 
         lastActivityTime = now
-        if isOnboarding {
-            openOnboardingPopover()
-            return
-        }
         if isIdleForPopover {
             closePopover()
         } else {
@@ -512,64 +548,50 @@ class WalkerCharacter {
         }
     }
 
-    private func openOnboardingPopover() {
-        showingCompletion = false
-        hideBubble()
+    private static let welcomeMessage = """
+    # hey! i'm your kitty agent.
 
-        isIdleForPopover = true
-        isWalking = false
-        isPaused = true
+    i'm a little helper that helps you chat with AI coding assistants — AIs that can read the files in your project, write and edit the apps or websites you want to create, run commands on your computer, and answer any questions about what you're building.
 
-        if riveViewModel != nil {
-            rivePause()
-        } else {
-            queuePlayer?.pause()
-            queuePlayer?.seek(to: .zero)
-        }
+    ### pick your AI
 
-        if popoverWindow == nil {
-            createPopoverWindow()
-        }
+    do you prefer Anthropic, OpenAI, Google, or GitHub? i work with each of their coding AIs, so go with whichever you like. you can switch between them anytime by clicking the name at the top of this window:
 
-        terminalView?.inputField.isEditable = false
-        terminalView?.inputField.placeholderString = ""
-        let welcome = """
-        hey! i'm your lil dock agent.
+    - **Claude** (by Anthropic)
+    - **Codex** (by OpenAI)
+    - **Gemini** (by Google)
+    - **GitHub Copilot**
+    - **OpenCode**
+    - **OpenClaw** (connect to your own AI server)
 
-        click me to open a Claude AI chat. i'll hang around while you work and let you know when Claude's thinking.
+    ### a note on cost
 
-        check the menu bar icon (top right) for themes, sounds, and more options.
+    most of these AIs aren't free to use. the companies charge for the AI's "thinking time" — measured in things called **tokens**, which are just bite-size chunks of text (a short message might be 20–50 tokens; a whole page of code a few hundred). you're billed a tiny fraction of a cent per token.
 
-        click anywhere outside to dismiss, then click me again to start chatting.
-        """
-        terminalView?.appendStreamingText(welcome)
-        terminalView?.endStreaming()
+    rough idea of what each one costs:
 
-        updatePopoverPosition()
-        popoverWindow?.orderFrontRegardless()
+    - **Claude**: $20/month for Claude Pro (easiest for regular use), or pay-per-use
+    - **Codex** (OpenAI): pay-per-use, usually a few cents per message
+    - **Gemini** (Google): has a free tier that's enough for casual use
 
-        clickOutsideMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
-            self?.closeOnboarding()
-        }
-        escapeKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { self?.closeOnboarding(); return nil }
-            return event
-        }
-    }
+    you'll set up billing with whichever company you pick when you make an account during install.
 
-    private func closeOnboarding() {
-        if let monitor = clickOutsideMonitor { NSEvent.removeMonitor(monitor); clickOutsideMonitor = nil }
-        if let monitor = escapeKeyMonitor { NSEvent.removeMonitor(monitor); escapeKeyMonitor = nil }
-        popoverWindow?.orderOut(nil)
-        popoverWindow = nil
-        terminalView = nil
-        isIdleForPopover = false
-        isOnboarding = false
-        isPaused = true
-        pauseEndTime = CACurrentMediaTime() + Double.random(in: 1.0...3.0)
-        if riveViewModel == nil { queuePlayer?.seek(to: .zero) }
-        controller?.completeOnboarding()
-    }
+    ### getting started
+
+    see the **install** button up top next to the hammer? click it and i'll walk you through everything. i'll open the sign-up page, wait for you to make an account, and then install the AI for you right here.
+
+    (works for Claude, Codex, and Gemini right now. for the others, you can find install steps on each one's website.)
+
+    ### tips
+
+    - click the hammer icon above for shortcuts (like clearing the chat)
+    - press esc while i'm working to stop what i'm doing
+    - triple-click me to quit
+
+    ---
+
+    go ahead — type below and press enter.
+    """
 
     func openPopover() {
         if let siblings = controller?.characters {
@@ -599,6 +621,14 @@ class WalkerCharacter {
             session = newSession
             wireSession(newSession)
             newSession.start()
+        } else if let s = session, !s.isRunning, s.history.isEmpty {
+            // Session exists but never connected (e.g. launch failed on a previous
+            // open). Discard it and try fresh so the user isn't stuck on the error.
+            session?.terminate()
+            let newSession = makeSession()
+            session = newSession
+            wireSession(newSession)
+            newSession.start()
         }
 
         if popoverWindow == nil {
@@ -606,7 +636,31 @@ class WalkerCharacter {
         }
 
         if let terminal = terminalView, let session = session, !session.history.isEmpty {
-            terminal.replayHistory(session.history)
+            terminal.resetState()
+            if isOnboarding {
+                terminal.appendStreamingText(Self.welcomeMessage)
+                terminal.endStreaming()
+            }
+            for msg in session.history {
+                switch msg.role {
+                case .user: terminal.appendUser(msg.text)
+                case .assistant: terminal.appendStreamingText(msg.text + "\n"); terminal.endStreaming()
+                case .notice: terminal.appendStreamingText("\n" + msg.text + "\n"); terminal.endStreaming()
+                case .error: terminal.appendError(msg.text)
+                case .toolUse, .toolResult: break
+                }
+            }
+            welcomeShownInPopover = true
+            DispatchQueue.main.async { [weak self] in
+                self?.terminalView?.textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
+            }
+        } else if isOnboarding && !welcomeShownInPopover {
+            terminalView?.appendStreamingText(Self.welcomeMessage)
+            terminalView?.endStreaming()
+            DispatchQueue.main.async { [weak self] in
+                self?.terminalView?.textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
+            }
+            welcomeShownInPopover = true
         }
 
         updatePopoverPosition()
@@ -738,15 +792,35 @@ class WalkerCharacter {
         clickArea.action = #selector(showProviderMenu(_:))
         titleBar.addSubview(clickArea)
 
-        let toolsBtn = NSButton(frame: NSRect(x: popoverWidth - 68, y: 5, width: 16, height: 16))
-        toolsBtn.image = NSImage(systemSymbolName: "hammer", accessibilityDescription: "Commands")
-        toolsBtn.imageScaling = .scaleProportionallyDown
-        toolsBtn.bezelStyle = .inline
-        toolsBtn.isBordered = false
-        toolsBtn.contentTintColor = t.titleText.withAlphaComponent(0.75)
-        toolsBtn.target = self
-        toolsBtn.action = #selector(showCommandsMenu(_:))
-        titleBar.addSubview(toolsBtn)
+        if provider.supportsInstallFlow {
+            let installTitle = "install \(provider.displayName)"
+            let installFont = NSFont.systemFont(ofSize: 11, weight: .medium)
+            let installTextWidth = (installTitle as NSString).size(withAttributes: [.font: installFont]).width
+            let installBtnWidth = ceil(installTextWidth) + 18
+            let installBtn = NSButton(frame: NSRect(x: popoverWidth - 68 - installBtnWidth - 6, y: 4, width: installBtnWidth, height: 20))
+            installBtn.attributedTitle = NSAttributedString(string: installTitle, attributes: [
+                .font: installFont,
+                .foregroundColor: t.accentColor
+            ])
+            installBtn.bezelStyle = .inline
+            installBtn.isBordered = true
+            installBtn.target = self
+            installBtn.action = #selector(startInstallFlow)
+            titleBar.addSubview(installBtn)
+            self.installButton = installBtn
+        }
+
+        if provider.showsHammerMenu {
+            let toolsBtn = NSButton(frame: NSRect(x: popoverWidth - 68, y: 5, width: 16, height: 16))
+            toolsBtn.image = NSImage(systemSymbolName: "hammer", accessibilityDescription: "Commands")
+            toolsBtn.imageScaling = .scaleProportionallyDown
+            toolsBtn.bezelStyle = .inline
+            toolsBtn.isBordered = false
+            toolsBtn.contentTintColor = t.titleText.withAlphaComponent(0.75)
+            toolsBtn.target = self
+            toolsBtn.action = #selector(showCommandsMenu(_:))
+            titleBar.addSubview(toolsBtn)
+        }
 
         let refreshBtn = NSButton(frame: NSRect(x: popoverWidth - 48, y: 5, width: 16, height: 16))
         refreshBtn.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "Refresh")
@@ -782,9 +856,16 @@ class WalkerCharacter {
         terminal.onSendMessage = { [weak self] message in
             guard let self = self else { return }
             self.lastActivityTime = CACurrentMediaTime()
+            if let flow = self.currentInstallFlow, flow.handleUserInput(message) {
+                return
+            }
             self.agentBusyStartTime = 0
             self.currentCatState = .focusing  // reset so .thinking always re-triggers below
             self.triggerCatAnimation(.thinking)
+            if self.isOnboarding {
+                self.isOnboarding = false
+                self.controller?.completeOnboarding()
+            }
             self.session?.send(message: message)
         }
         terminal.onClearRequested = { [weak self] in
@@ -816,7 +897,15 @@ class WalkerCharacter {
         completionBubbleExpiry = 0
         hideBubble()
         terminalView?.resetState()
-        terminalView?.showSessionMessage()
+        if isOnboarding {
+            terminalView?.appendStreamingText(Self.welcomeMessage)
+            terminalView?.endStreaming()
+            DispatchQueue.main.async { [weak self] in
+                self?.terminalView?.textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
+            }
+        } else {
+            terminalView?.showSessionMessage()
+        }
         let newSession = makeSession()
         session = newSession
         wireSession(newSession)
@@ -851,6 +940,14 @@ class WalkerCharacter {
         session.onError = { [weak self] text in
             guard let self = self else { return }
             self.terminalView?.appendError(text)
+            self.agentBusyStartTime = 0
+            self.triggerCatAnimation(.idle)
+        }
+
+        session.onNotice = { [weak self] text in
+            guard let self = self else { return }
+            self.terminalView?.appendStreamingText("\n" + text + "\n")
+            self.terminalView?.endStreaming()
             self.agentBusyStartTime = 0
             self.triggerCatAnimation(.idle)
         }
@@ -901,11 +998,14 @@ class WalkerCharacter {
               let newProvider = AgentProvider(rawValue: raw),
               newProvider != provider else { return }
         provider = newProvider
+        currentInstallFlow?.cancel()
+        currentInstallFlow = nil
         session?.terminate()
         session = nil
         popoverWindow?.orderOut(nil)
         popoverWindow = nil
         terminalView = nil
+        welcomeShownInPopover = false
         thinkingBubbleWindow?.orderOut(nil)
         thinkingBubbleWindow = nil
         openPopover()
@@ -920,48 +1020,67 @@ class WalkerCharacter {
         resetSession()
     }
 
+    @objc func startInstallFlow() {
+        guard provider.supportsInstallFlow else { return }
+        currentInstallFlow?.cancel()
+        let flow = InstallFlow(provider: provider, character: self)
+        currentInstallFlow = flow
+        flow.start()
+    }
+
+    func retrySessionIfNeeded() {
+        session?.terminate()
+        session = nil
+        let newSession = makeSession()
+        session = newSession
+        wireSession(newSession)
+        newSession.start()
+        // Keep the install button visible so the user can always re-run the flow
+        // (paste a new API key, reinstall, etc.) without having to change providers.
+        AgentProvider.detectAvailableProviders { }
+    }
+
     @objc func showCommandsMenu(_ sender: NSButton) {
         let menu = NSMenu()
         menu.font = NSFont.systemFont(ofSize: 13)
 
-        let header = NSMenuItem(title: "Slash Commands", action: nil, keyEquivalent: "")
+        let header = NSMenuItem(title: "Shortcuts", action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
         menu.addItem(.separator())
 
-        let entries: [(cmd: String, desc: String, action: String?)] = [
-            ("/clear",        "clear chat history",          "/clear"),
-            ("/copy",         "copy last response",          "/copy"),
-            ("/model",        "switch model  →",             nil),
-            ("/mcp",          "list MCP servers",            "/mcp"),
-        ]
+        let clearItem = NSMenuItem(title: "/clear  —  clear chat history", action: #selector(runCommandMenuItem(_:)), keyEquivalent: "")
+        clearItem.representedObject = "/clear"
+        clearItem.target = self
+        menu.addItem(clearItem)
 
-        for entry in entries {
-            if entry.action == nil {
-                let modelItem = NSMenuItem(title: "\(entry.cmd)  —  \(entry.desc)", action: nil, keyEquivalent: "")
-                modelItem.isEnabled = false
-                menu.addItem(modelItem)
+        let copyItem = NSMenuItem(title: "/copy  —  copy last response", action: #selector(runCommandMenuItem(_:)), keyEquivalent: "")
+        copyItem.representedObject = "/copy"
+        copyItem.target = self
+        menu.addItem(copyItem)
 
-                let models: [(String, String, String)] = [
-                    ("opus",   "claude-opus-4-7",          "most capable"),
-                    ("sonnet", "claude-sonnet-4-6",        "balanced · default"),
-                    ("haiku",  "claude-haiku-4-5-20251001","fastest"),
-                ]
-                for (alias, _, desc) in models {
-                    let current = terminalView?.currentModel.contains(alias) == true
-                    let check = current ? "✓ " : "   "
-                    let item = NSMenuItem(title: "\(check)\(alias)  —  \(desc)", action: #selector(runCommandMenuItem(_:)), keyEquivalent: "")
-                    item.representedObject = "/model \(alias)"
-                    item.target = self
-                    item.indentationLevel = 1
-                    menu.addItem(item)
-                }
-            } else {
-                let item = NSMenuItem(title: "\(entry.cmd)  —  \(entry.desc)", action: #selector(runCommandMenuItem(_:)), keyEquivalent: "")
-                item.representedObject = entry.action
+        let models = provider.modelOptions
+        if !models.isEmpty {
+            let modelHeader = NSMenuItem(title: "switch model", action: nil, keyEquivalent: "")
+            modelHeader.isEnabled = false
+            menu.addItem(modelHeader)
+            let currentFull = currentProviderModel
+            for m in models {
+                let isCurrent = currentFull == m.full
+                let check = isCurrent ? "✓ " : "   "
+                let item = NSMenuItem(title: "\(check)\(m.alias)  —  \(m.desc)", action: #selector(pickModelFromMenu(_:)), keyEquivalent: "")
+                item.representedObject = m.full
                 item.target = self
+                item.indentationLevel = 1
                 menu.addItem(item)
             }
+        }
+
+        if provider.supportsMCP {
+            let mcpItem = NSMenuItem(title: "/mcp  —  list MCP servers", action: #selector(runCommandMenuItem(_:)), keyEquivalent: "")
+            mcpItem.representedObject = "/mcp"
+            mcpItem.target = self
+            menu.addItem(mcpItem)
         }
 
         let pt = NSPoint(x: sender.frame.minX, y: sender.frame.minY - 2)
@@ -971,6 +1090,13 @@ class WalkerCharacter {
     @objc private func runCommandMenuItem(_ item: NSMenuItem) {
         guard let cmd = item.representedObject as? String else { return }
         terminalView?.handleSlashCommandPublic(cmd)
+    }
+
+    @objc private func pickModelFromMenu(_ item: NSMenuItem) {
+        guard let full = item.representedObject as? String else { return }
+        setModelForCurrentProvider(full)
+        terminalView?.currentModel = full
+        resetSession()
     }
 
     private func formatToolInput(_ input: [String: Any]) -> String {

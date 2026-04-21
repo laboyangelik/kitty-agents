@@ -132,6 +132,7 @@ class OpenClawSession: AgentSession {
 
     var onText: ((String) -> Void)?
     var onError: ((String) -> Void)?
+    var onNotice: ((String) -> Void)?
     var onToolUse: ((String, [String: Any]) -> Void)?
     var onToolResult: ((String, Bool) -> Void)?
     var onSessionReady: (() -> Void)?

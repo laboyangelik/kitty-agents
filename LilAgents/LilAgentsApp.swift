@@ -28,6 +28,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         controller?.characters.forEach { $0.session?.terminate() }
     }
 
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard let char = controller?.characters.first else { return true }
+        if !char.isManuallyVisible {
+            char.greetAfterReopen()
+            buildMenu()
+        }
+        return true
+    }
+
     // MARK: - Menu Bar
 
     func setupMenuBar() {

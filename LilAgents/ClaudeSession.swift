@@ -12,9 +12,15 @@ class ClaudeSession: AgentSession {
     private(set) var isBusy = false
     private static var binaryPath: String?
     var model: String = "claude-sonnet-4-6"
+    private var isStarting = false
+
+    static func clearBinaryCache() {
+        binaryPath = nil
+    }
 
     var onText: ((String) -> Void)?
     var onError: ((String) -> Void)?
+    var onNotice: ((String) -> Void)?
     var onToolUse: ((String, [String: Any]) -> Void)?
     var onToolResult: ((String, Bool) -> Void)?
     var onSessionReady: (() -> Void)?
@@ -26,7 +32,11 @@ class ClaudeSession: AgentSession {
     // MARK: - Process Lifecycle
 
     func start() {
+        guard !isStarting else { return }
+        isStarting = true
+
         if let cached = Self.binaryPath {
+            isStarting = false
             launchProcess(binaryPath: cached)
             return
         }
@@ -38,10 +48,11 @@ class ClaudeSession: AgentSession {
             "/usr/local/bin/claude",
             "/opt/homebrew/bin/claude"
         ]) { [weak self] path in
+            self?.isStarting = false
             guard let self = self, let binaryPath = path else {
-                let msg = "Claude CLI not found.\n\n\(AgentProvider.claude.installInstructions)"
-                self?.onError?(msg)
-                self?.history.append(AgentMessage(role: .error, text: msg))
+                let msg = "hey! it looks like you don't have Claude installed yet. \(AgentProvider.claude.installInstructions)"
+                self?.onNotice?(msg)
+                self?.history.append(AgentMessage(role: .notice, text: msg))
                 return
             }
             Self.binaryPath = binaryPath
@@ -111,13 +122,30 @@ class ClaudeSession: AgentSession {
                 writeMessage(msg, to: inPipe)
             }
         } catch {
-            let msg = "Failed to launch Claude CLI.\n\n\(AgentProvider.claude.installInstructions)\n\nError: \(error.localizedDescription)"
+            // Clear the cached path so the next start() will re-discover the binary.
+            Self.binaryPath = nil
+            let binExists = FileManager.default.isExecutableFile(atPath: binaryPath)
+            let msg: String
+            if binExists {
+                // Binary is installed — don't tell the user to install it.
+                // They can recover by sending a message, which triggers a retry.
+                msg = "couldn't start Claude right now (\(error.localizedDescription)) — send a message to try again."
+            } else {
+                msg = "Failed to launch Claude CLI.\n\n\(AgentProvider.claude.installInstructions)\n\nError: \(error.localizedDescription)"
+            }
             onError?(msg)
-            history.append(AgentMessage(role: .error, text: msg))
+            // Do NOT append launch errors to history — they're transient and would
+            // be re-shown every time the popover opens via the history replay loop.
         }
     }
 
     func send(message: String) {
+        if !isRunning && process == nil {
+            // Session never started or launch failed — queue message and retry.
+            pendingMessages.append(message)
+            start()
+            return
+        }
         guard isRunning, let pipe = inputPipe else {
             pendingMessages.append(message)
             return

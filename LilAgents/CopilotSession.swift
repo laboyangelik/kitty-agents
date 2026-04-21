@@ -13,6 +13,7 @@ class CopilotSession: AgentSession {
 
     var onText: ((String) -> Void)?
     var onError: ((String) -> Void)?
+    var onNotice: ((String) -> Void)?
     var onToolUse: ((String, [String: Any]) -> Void)?
     var onToolResult: ((String, Bool) -> Void)?
     var onSessionReady: (() -> Void)?
@@ -43,9 +44,9 @@ class CopilotSession: AgentSession {
                 self.isRunning = true
                 self.onSessionReady?()
             } else {
-                let msg = "Copilot CLI not found.\n\n\(AgentProvider.copilot.installInstructions)"
-                self.onError?(msg)
-                self.history.append(AgentMessage(role: .error, text: msg))
+                let msg = "hey! it looks like you don't have Copilot installed yet. \(AgentProvider.copilot.installInstructions)"
+                self.onNotice?(msg)
+                self.history.append(AgentMessage(role: .notice, text: msg))
             }
         }
     }

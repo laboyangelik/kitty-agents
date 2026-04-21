@@ -3,6 +3,12 @@ import Foundation
 class ShellEnvironment {
     private static var cachedEnvironment: [String: String]?
 
+    /// Drop the cached login-shell environment. Call after an install so
+    /// subsequent findBinary / processEnvironment calls re-read the fresh PATH.
+    static func clearCache() {
+        cachedEnvironment = nil
+    }
+
     /// Capture the user's login shell environment (zsh -l -i).
     /// Results are cached after the first successful call.
     static func resolve(completion: @escaping ([String: String]?) -> Void) {

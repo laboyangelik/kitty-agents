@@ -175,6 +175,85 @@ class TerminalView: NSView, NSTextFieldDelegate {
         storage.deleteCharacters(in: NSRange(location: statusTextLocation, length: storage.length - statusTextLocation))
     }
 
+    // MARK: - Persistent Loading Indicator
+    // Used for long-running async work like installs, where we want continuous
+    // feedback that survives across streamed output chunks.
+
+    private var loadingActive = false
+    private var loadingPhrases: [String] = []
+    private var loadingPhraseIndex = 0
+    private var loadingSpinnerFrame = 0
+    private var loadingStartIndex: Int = -1
+    private var loadingTimer: Timer?
+
+    func startLoading(phrases: [String]) {
+        stopLoading()
+        loadingActive = true
+        loadingPhrases = phrases.isEmpty ? ["loading…"] : phrases
+        loadingPhraseIndex = Int.random(in: 0..<loadingPhrases.count)
+        loadingSpinnerFrame = 0
+        renderLoadingLine()
+        loadingTimer = Timer.scheduledTimer(withTimeInterval: 0.12, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            self.loadingSpinnerFrame += 1
+            if self.loadingSpinnerFrame % Self.phraseAdvanceEvery == 0 {
+                self.loadingPhraseIndex = (self.loadingPhraseIndex + 1) % max(self.loadingPhrases.count, 1)
+            }
+            self.renderLoadingLine()
+        }
+    }
+
+    func stopLoading() {
+        loadingTimer?.invalidate()
+        loadingTimer = nil
+        if loadingActive { removeLoadingLine() }
+        loadingActive = false
+    }
+
+    private func loadingAttributedString() -> NSAttributedString {
+        let t = theme
+        let spinner = Self.spinnerFrames[loadingSpinnerFrame % Self.spinnerFrames.count]
+        let phrase = loadingPhrases.isEmpty ? "loading…" : loadingPhrases[loadingPhraseIndex % loadingPhrases.count]
+        let str = NSMutableAttributedString()
+        str.append(NSAttributedString(
+            string: "  \(spinner) ",
+            attributes: [.font: t.fontBold, .foregroundColor: t.accentColor]))
+        str.append(NSAttributedString(
+            string: "\(phrase)\n",
+            attributes: [.font: t.font, .foregroundColor: t.accentColor.withAlphaComponent(0.7)]))
+        return str
+    }
+
+    private func renderLoadingLine() {
+        guard loadingActive, let storage = textView.textStorage else { return }
+        if loadingStartIndex >= 0 && loadingStartIndex <= storage.length {
+            let range = NSRange(location: loadingStartIndex, length: storage.length - loadingStartIndex)
+            storage.replaceCharacters(in: range, with: loadingAttributedString())
+        } else {
+            loadingStartIndex = storage.length
+            storage.append(loadingAttributedString())
+        }
+        scrollToBottom()
+    }
+
+    private func removeLoadingLine() {
+        guard let storage = textView.textStorage, loadingStartIndex >= 0,
+              loadingStartIndex <= storage.length else { return }
+        storage.deleteCharacters(in: NSRange(location: loadingStartIndex, length: storage.length - loadingStartIndex))
+        loadingStartIndex = -1
+    }
+
+    private func withoutLoadingLine(_ block: () -> Void) {
+        let wasActive = loadingActive
+        if wasActive { removeLoadingLine() }
+        block()
+        if wasActive {
+            loadingStartIndex = textView.textStorage?.length ?? 0
+            textView.textStorage?.append(loadingAttributedString())
+            scrollToBottom()
+        }
+    }
+
     private func setupViews() {
         let t = theme
         let inputHeight: CGFloat = 30
@@ -241,6 +320,7 @@ class TerminalView: NSView, NSTextFieldDelegate {
     }
 
     func resetState() {
+        stopLoading()
         isStreaming = false
         currentAssistantText = ""
         lastAssistantText = ""
@@ -512,30 +592,34 @@ class TerminalView: NSView, NSTextFieldDelegate {
     }
 
     func appendUser(_ text: String) {
-        let t = theme
-        ensureNewline()
-        let para = messageSpacing
-        let attributed = NSMutableAttributedString()
-        attributed.append(NSAttributedString(string: "> ", attributes: [
-            .font: t.fontBold, .foregroundColor: t.accentColor, .paragraphStyle: para
-        ]))
-        attributed.append(NSAttributedString(string: "\(text)\n", attributes: [
-            .font: t.fontBold, .foregroundColor: t.textPrimary, .paragraphStyle: para
-        ]))
-        textView.textStorage?.append(attributed)
-        scrollToBottom()
+        withoutLoadingLine {
+            let t = theme
+            ensureNewline()
+            let para = messageSpacing
+            let attributed = NSMutableAttributedString()
+            attributed.append(NSAttributedString(string: "> ", attributes: [
+                .font: t.fontBold, .foregroundColor: t.accentColor, .paragraphStyle: para
+            ]))
+            attributed.append(NSAttributedString(string: "\(text)\n", attributes: [
+                .font: t.fontBold, .foregroundColor: t.textPrimary, .paragraphStyle: para
+            ]))
+            textView.textStorage?.append(attributed)
+            scrollToBottom()
+        }
     }
 
     func appendStreamingText(_ text: String) {
         stopStatusCycling()
-        var cleaned = text
-        if currentAssistantText.isEmpty {
-            cleaned = cleaned.replacingOccurrences(of: "^\n+", with: "", options: .regularExpression)
-        }
-        currentAssistantText += cleaned
-        if !cleaned.isEmpty {
-            textView.textStorage?.append(renderMarkdown(cleaned))
-            scrollToBottom()
+        withoutLoadingLine {
+            var cleaned = text
+            if currentAssistantText.isEmpty {
+                cleaned = cleaned.replacingOccurrences(of: "^\n+", with: "", options: .regularExpression)
+            }
+            currentAssistantText += cleaned
+            if !cleaned.isEmpty {
+                textView.textStorage?.append(renderMarkdown(cleaned))
+                scrollToBottom()
+            }
         }
     }
 
@@ -598,6 +682,8 @@ class TerminalView: NSView, NSTextFieldDelegate {
                 textView.textStorage?.append(renderMarkdown(msg.text + "\n"))
             case .error:
                 appendError(msg.text)
+            case .notice:
+                textView.textStorage?.append(renderMarkdown("\n" + msg.text + "\n"))
             case .toolUse:
                 textView.textStorage?.append(NSAttributedString(string: "  \(msg.text)\n", attributes: [
                     .font: t.font, .foregroundColor: t.accentColor
