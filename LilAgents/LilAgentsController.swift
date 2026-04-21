@@ -218,7 +218,7 @@ class LilAgentsController {
 
         let sorted = activeChars.sorted { $0.positionProgress < $1.positionProgress }
         for (i, char) in sorted.enumerated() {
-            char.window.level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + i)
+            char.window.level = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue + i)
         }
     }
 
