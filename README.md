@@ -12,7 +12,7 @@ Supports **Claude Code**, **OpenAI Codex**, **GitHub Copilot**, **Google Gemini*
 
 ## installing
 
-**[⬇ Download kitty-agents-1.3.0.zip](https://github.com/laboyangelik/kitty-agents/releases/latest)**
+**[Download kitty-agents-latest.zip](https://github.com/laboyangelik/kitty-agents/releases/latest/download/kitty-agents-latest.zip)**
 
 1. Download the zip above and unzip it
 2. Drag **kitty agents.app** to your Applications folder
