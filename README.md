@@ -59,7 +59,7 @@ Type any of these in the chat input:
 
 ## provider setup
 
-For **Claude**, **Codex**, and **Gemini** — you don't need to set anything up manually. Click the **install** button in the app (next to the ⚙ icon in the chat header) and kitty agents will walk you through creating an account and getting everything configured right in the chat window.
+For **Claude**, **Codex**, and **Gemini** — you don't need to set anything up manually. Click the **install** button in the app (next to the hammer icon in the chat header) and kitty agents will walk you through creating an account and getting everything configured right in the chat window.
 
 For providers without a built-in flow, install manually:
 
