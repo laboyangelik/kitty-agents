@@ -1,6 +1,7 @@
 name: Release
 
-# Trigger by pushing a version tag: git tag v1.3.0 && git push origin v1.3.0
+# Trigger by pushing a version tag:
+#   git tag v1.3.0 && git push origin v1.3.0
 on:
   push:
     tags:
@@ -21,7 +22,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Use a PAT so the appcast commit can trigger future workflows if needed
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve version
@@ -34,10 +34,10 @@ jobs:
           fi
           BUILD=$(git rev-list --count HEAD)
           ZIP="kitty-agents-${VERSION}.zip"
-          echo "version=$VERSION"  >> $GITHUB_OUTPUT
-          echo "build=$BUILD"      >> $GITHUB_OUTPUT
-          echo "zip=$ZIP"          >> $GITHUB_OUTPUT
-          echo "tag=v$VERSION"     >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build=$BUILD"     >> $GITHUB_OUTPUT
+          echo "zip=$ZIP"         >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION"    >> $GITHUB_OUTPUT
 
       - name: Build (archive)
         run: |
@@ -50,19 +50,18 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             SKIP_INSTALL=NO \
-            2>&1 | grep -E "error:|warning:|archive"
+            2>&1 | grep -E "error:|archive|ARCHIVE"
 
       - name: Package .app → .zip
         run: |
           APP=$(find "$RUNNER_TEMP/LilAgents.xcarchive" -name "*.app" | head -1)
-          echo "Found app: $APP"
+          echo "Packaging: $APP"
           mkdir -p "$RUNNER_TEMP/dist"
           cp -R "$APP" "$RUNNER_TEMP/dist/"
-          # Ad-hoc sign so macOS doesn't flag it as completely unsigned
           codesign --force --deep --sign - "$RUNNER_TEMP/dist/kitty agents.app"
           cd "$RUNNER_TEMP/dist"
           zip -r "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "kitty agents.app"
-          echo "Zip size: $(du -h "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" | cut -f1)"
+          echo "Size: $(du -sh "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" | cut -f1)"
 
       - name: Download Sparkle tools
         run: |
@@ -71,24 +70,20 @@ jobs:
           mkdir -p "$RUNNER_TEMP/sparkle"
           tar -xf "$RUNNER_TEMP/Sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
 
-      - name: Sign update with Sparkle EdDSA
+      - name: Sign with Sparkle EdDSA
         id: sign
         run: |
-          # Write private key from secret to a temp file
           printf '%s' "${{ secrets.SPARKLE_PRIVATE_KEY }}" > "$RUNNER_TEMP/sparkle_key.txt"
 
           OUTPUT=$("$RUNNER_TEMP/sparkle/bin/sign_update" \
             --ed-key-file "$RUNNER_TEMP/sparkle_key.txt" \
             "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" 2>&1)
-          echo "sign_update output: $OUTPUT"
 
           SIG=$(echo "$OUTPUT" | grep -o 'edSignature="[^"]*"' | sed 's/edSignature="\([^"]*\)"/\1/')
           LEN=$(stat -f%z "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}")
 
           echo "signature=$SIG" >> $GITHUB_OUTPUT
           echo "length=$LEN"    >> $GITHUB_OUTPUT
-
-          # Clean up private key immediately
           rm -f "$RUNNER_TEMP/sparkle_key.txt"
 
       - name: Create GitHub Release
@@ -100,48 +95,16 @@ jobs:
           files: ${{ runner.temp }}/${{ steps.ver.outputs.zip }}
 
       - name: Update appcast.xml
+        env:
+          RELEASE_VERSION: ${{ steps.ver.outputs.version }}
+          RELEASE_BUILD:   ${{ steps.ver.outputs.build }}
+          RELEASE_ZIP:     ${{ steps.ver.outputs.zip }}
+          SPARKLE_SIG:     ${{ steps.sign.outputs.signature }}
+          RELEASE_LENGTH:  ${{ steps.sign.outputs.length }}
+        run: python3 .github/scripts/update_appcast.py
+
+      - name: Commit updated appcast.xml
         run: |
-          python3 << 'PYEOF'
-import re
-from datetime import datetime, timezone
-
-version   = "${{ steps.ver.outputs.version }}"
-build     = "${{ steps.ver.outputs.build }}"
-sig       = "${{ steps.sign.outputs.signature }}"
-length    = "${{ steps.sign.outputs.length }}"
-repo      = "${{ github.repository }}"
-zip_name  = "${{ steps.ver.outputs.zip }}"
-url       = f"https://github.com/{repo}/releases/download/v{version}/{zip_name}"
-date      = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
-
-new_item = f"""\
-        <item>
-            <title>v{version}</title>
-            <description><![CDATA[<p>kitty agents {version}</p>]]></description>
-            <pubDate>{date}</pubDate>
-            <sparkle:version>{build}</sparkle:version>
-            <sparkle:shortVersionString>{version}</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <enclosure
-                url="{url}"
-                type="application/octet-stream"
-                sparkle:edSignature="{sig}"
-                length="{length}"
-            />
-        </item>"""
-
-with open("appcast.xml") as f:
-    content = f.read()
-
-# Insert newest release before the first existing <item>
-content = content.replace("<item>", new_item + "\n        <item>", 1)
-
-with open("appcast.xml", "w") as f:
-    f.write(content)
-
-print(f"appcast.xml updated for v{version}")
-PYEOF
-
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add appcast.xml
