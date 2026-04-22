@@ -12,9 +12,9 @@ curl -fsSL -o "$TMPZIP" \
   "https://github.com/laboyangelik/kitty-agents/releases/latest/download/kitty-agents-latest.zip"
 
 echo "installing..."
-ditto -x -k "$TMPZIP" "$TMPDIR"
+unzip -q "$TMPZIP" -d "$TMPDIR"
 rm -rf "/Applications/kitty agents.app"
-ditto "$TMPDIR/kitty agents.app" "/Applications/kitty agents.app"
+cp -a "$TMPDIR/kitty agents.app" "/Applications/"
 xattr -cr "/Applications/kitty agents.app"
 
 echo "done! launching kitty agents..."

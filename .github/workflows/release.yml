@@ -61,7 +61,7 @@ jobs:
           codesign --force --deep --sign - "$RUNNER_TEMP/dist/kitty agents.app"
 
           cd "$RUNNER_TEMP/dist"
-          ditto -c -k --sequesterRsrc --keepParent "kitty agents.app" "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}"
+          zip -ry "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "kitty agents.app"
           cp "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "$RUNNER_TEMP/kitty-agents-latest.zip"
           echo "Size: $(du -sh "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" | cut -f1)"
 
