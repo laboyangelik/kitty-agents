@@ -41,7 +41,7 @@ Rough idea of what each one costs:
 - **GitHub Copilot** — requires a GitHub Copilot subscription ($10/month individual or included in GitHub Pro)
 - **OpenCode** — billed through whichever AI backend you configure it with
 
-You'll set up billing directly with whichever company you pick when you create an account. kitty agents itself is free and open source (MIT).
+You'll set up billing directly with whichever company you pick when you create an account. kitty agents itself is free and open source.
 
 ---
 
