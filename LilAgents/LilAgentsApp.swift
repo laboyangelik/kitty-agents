@@ -214,6 +214,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openChat() {
         guard let char = controller?.characters.first else { return }
         NSApp.activate(ignoringOtherApps: true)
+        if !char.isManuallyVisible {
+            char.setManuallyVisible(true)
+            buildMenu()
+        }
         if !char.isIdleForPopover {
             char.openPopover()
         }
