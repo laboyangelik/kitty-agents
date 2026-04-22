@@ -49,6 +49,7 @@ You'll set up billing directly with whichever company you pick when you create a
 
 - Rive-animated cat that lives above your dock
 - Click to open an AI chat terminal popover
+- **`⌘K` global shortcut** — brings the cat and chat to the front from any app
 - **Built-in install wizard** — for Claude, Codex, and Gemini, click the install button and the app walks you through setup without ever opening a terminal
 - Animated loading indicator while installs are running so you always know it's working
 - 7 cat colors: Gray, Ungu, Blue, Calico, Black, White, Orange
@@ -62,6 +63,14 @@ You'll set up billing directly with whichever company you pick when you create a
 - Pin to a specific display on multi-monitor setups
 - Triple-tap the kitty to quit
 - Auto-updates via Sparkle
+
+---
+
+## keyboard shortcut
+
+| shortcut | what it does |
+|---|---|
+| `⌘K` | bring kitty and the chat window to the front from any app |
 
 ---
 
