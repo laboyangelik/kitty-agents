@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import Sparkle
 import ServiceManagement
+import Carbon.HIToolbox
 
 @main
 struct LilAgentsApp: App {
@@ -16,12 +17,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var controller: LilAgentsController?
     var statusItem: NSStatusItem?
     let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyHandlerRef: EventHandlerRef?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         controller = LilAgentsController()
         controller?.start()
         setupMenuBar()
+        setupGlobalHotkey()
+    }
+
+    private func setupGlobalHotkey() {
+        var hotKeyID = EventHotKeyID()
+        hotKeyID.signature = OSType(0x6B636174) // 'kcat'
+        hotKeyID.id = 1
+
+        RegisterEventHotKey(UInt32(kVK_ANSI_K), UInt32(cmdKey), hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
+
+        var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
+        InstallApplicationEventHandler({ _, _, userData -> OSStatus in
+            guard let userData = userData else { return OSStatus(eventNotHandledErr) }
+            let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
+            DispatchQueue.main.async { delegate.openChat() }
+            return noErr
+        }, 1, &eventSpec, Unmanaged.passUnretained(self).toOpaque(), &hotKeyHandlerRef)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
