@@ -60,14 +60,8 @@ jobs:
           cp -R "$APP" "$RUNNER_TEMP/dist/"
           codesign --force --deep --sign - "$RUNNER_TEMP/dist/kitty agents.app"
 
-          # Bundled installer — double-clicking shows "Open" in macOS instead
-          # of the hard block that app bundles get without notarization.
-          cp ".github/scripts/install.command" "$RUNNER_TEMP/dist/Install kitty agents.command"
-          chmod +x "$RUNNER_TEMP/dist/Install kitty agents.command"
-
           cd "$RUNNER_TEMP/dist"
-          zip -r "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "kitty agents.app" "Install kitty agents.command"
-          cp "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "$RUNNER_TEMP/kitty-agents-latest.zip"
+          zip -r "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "kitty agents.app"
           echo "Size: $(du -sh "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" | cut -f1)"
 
       - name: Download Sparkle tools
@@ -99,9 +93,7 @@ jobs:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: ${{ steps.ver.outputs.tag }}
           generate_release_notes: true
-          files: |
-            ${{ runner.temp }}/${{ steps.ver.outputs.zip }}
-            ${{ runner.temp }}/kitty-agents-latest.zip
+          files: ${{ runner.temp }}/${{ steps.ver.outputs.zip }}
 
       - name: Update appcast.xml
         env:
