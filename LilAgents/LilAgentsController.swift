@@ -49,6 +49,12 @@ class LilAgentsController {
             bruce.showBubble(text: "hi!", isCompletion: true)
             bruce.playCompletionSound()
         }
+        // Auto-open the chat on first launch so the welcome message is shown without
+        // requiring the user to know to click the cat.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            guard bruce.isOnboarding && !bruce.isIdleForPopover else { return }
+            bruce.openPopover()
+        }
     }
 
     func completeOnboarding() {

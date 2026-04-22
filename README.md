@@ -27,6 +27,20 @@ That's it — kitty agents downloads, installs itself, and opens automatically. 
 
 At least one AI provider — Claude, Codex, Gemini, Copilot, OpenCode, or OpenClaw. The app will detect what you have installed automatically, and can walk you through installing Claude, Codex, or Gemini from inside the chat.
 
+### subscription & cost
+
+Most of these AIs aren't free. The companies charge for the AI's "thinking time" — billed in **tokens** (bite-size chunks of text; a short message is roughly 20–50 tokens, a page of code a few hundred). You're charged a small fraction of a cent per token.
+
+Rough idea of what each one costs:
+
+- **Claude** (Anthropic) — $20/month for Claude Pro, the easiest option for regular use; or pay-per-use via API
+- **Codex** (OpenAI) — pay-per-use; typically a few cents per message
+- **Gemini** (Google) — has a free tier generous enough for casual use
+- **GitHub Copilot** — requires a GitHub Copilot subscription ($10/month individual or included in GitHub Pro)
+- **OpenCode** — billed through whichever AI backend you configure it with
+
+You'll set up billing directly with whichever company you pick when you create an account. kitty agents itself is free and open source (MIT).
+
 ---
 
 ## features
