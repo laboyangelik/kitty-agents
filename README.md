@@ -1,6 +1,6 @@
 # kitty agents
 
-<video src="kitty-agents-intro.mp4" autoplay loop muted playsinline></video>
+![kitty agents](kitty-agents-intro.gif)
 
 A tiny AI cat that lives on your macOS dock. Built on top of [lil agents](https://github.com/ryanstephen/lil-agents) by [@ryanstephen](https://github.com/ryanstephen) — go give that repo a star. Uses the cat animation from [Cat Pomodoro](https://rive.app/marketplace/27136-51126-cat-pomodoro/) on Rive.
 
