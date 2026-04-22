@@ -59,9 +59,25 @@ jobs:
           mkdir -p "$RUNNER_TEMP/dist"
           cp -R "$APP" "$RUNNER_TEMP/dist/"
           codesign --force --deep --sign - "$RUNNER_TEMP/dist/kitty agents.app"
+
+          # Create installer script — double-clicking this shows "Open" instead
+          # of the macOS Gatekeeper block that app bundles get without notarization.
+          cat > "$RUNNER_TEMP/dist/Install kitty agents.command" << 'SCRIPT'
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+APP_SRC="$SCRIPT_DIR/kitty agents.app"
+APP_DEST="/Applications/kitty agents.app"
+
+echo "installing kitty agents..."
+cp -R "$APP_SRC" "$APP_DEST"
+xattr -cr "$APP_DEST"
+echo "done! opening kitty agents..."
+open "$APP_DEST"
+SCRIPT
+          chmod +x "$RUNNER_TEMP/dist/Install kitty agents.command"
+
           cd "$RUNNER_TEMP/dist"
-          zip -r "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "kitty agents.app"
-          # Fixed-name copy so the README download link never needs updating
+          zip -r "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "kitty agents.app" "Install kitty agents.command"
           cp "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "$RUNNER_TEMP/kitty-agents-latest.zip"
           echo "Size: $(du -sh "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" | cut -f1)"
 
