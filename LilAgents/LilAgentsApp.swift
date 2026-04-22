@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 import Sparkle
 import ServiceManagement
-import Carbon.HIToolbox
+import Carbon
 
 @main
 struct LilAgentsApp: App {
@@ -36,7 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         RegisterEventHotKey(UInt32(kVK_ANSI_K), UInt32(cmdKey), hotKeyID, GetApplicationEventTarget(), 0, &hotKeyRef)
 
         var eventSpec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-        InstallApplicationEventHandler({ _, _, userData -> OSStatus in
+        InstallEventHandler(GetApplicationEventTarget(), { _, _, userData -> OSStatus in
             guard let userData = userData else { return OSStatus(eventNotHandledErr) }
             let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
             DispatchQueue.main.async { delegate.openChat() }
