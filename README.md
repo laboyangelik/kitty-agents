@@ -20,6 +20,8 @@ curl -fsSL https://raw.githubusercontent.com/laboyangelik/kitty-agents/main/inst
 
 That's it — kitty agents downloads, installs itself, and opens automatically. The app keeps itself up to date from then on via Sparkle.
 
+![installing kitty agents](downloading.gif)
+
 ## requirements
 
 - macOS Sonoma 14.0 or later
