@@ -18,4 +18,7 @@ cp -a "$TMPDIR/kitty agents.app" "/Applications/"
 xattr -cr "/Applications/kitty agents.app"
 
 echo "done! launching kitty agents..."
+# Reset onboarding so the welcome message always shows on a fresh install.
+# Sparkle auto-updates don't run this script, so existing users aren't affected.
+defaults delete com.lilagents.app hasCompletedOnboarding 2>/dev/null || true
 open "/Applications/kitty agents.app"
