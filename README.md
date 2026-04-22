@@ -1,6 +1,6 @@
 # kitty agents
 
-<video src="https://github.com/laboyangelik/kitty-agents/releases/download/v1.3.0/kitty-agents-intro.mp4" autoplay loop muted playsinline></video>
+<video src="kitty-agents-intro.mp4" autoplay loop muted playsinline></video>
 
 A tiny AI cat that lives on your macOS dock. Built on top of [lil agents](https://github.com/ryanstephen/lil-agents) by [@ryanstephen](https://github.com/ryanstephen) — go give that repo a star. Uses the cat animation from [Cat Pomodoro](https://rive.app/marketplace/27136-51126-cat-pomodoro/) on Rive.
 
@@ -89,7 +89,7 @@ Once a CLI is installed and authenticated, it shows up automatically in menu bar
 
 ## menu bar
 
-![menu bar](https://github.com/laboyangelik/kitty-agents/releases/download/v1.3.0/menubar-preview.gif)
+![menu bar](menubar-preview.gif)
 
 Click the cat icon in the menu bar to access:
 
