@@ -12,14 +12,13 @@ Supports **Claude Code**, **OpenAI Codex**, **GitHub Copilot**, **Google Gemini*
 
 ## installing
 
-**[download kitty agents here](https://github.com/laboyangelik/kitty-agents/releases/latest/download/kitty-agents-latest.zip)**
+Open **Terminal** (press `⌘ Space`, type `Terminal`, press Enter) and paste this:
 
-1. Download the zip above and unzip it
-2. Double-click **Install kitty agents.command**
-3. macOS will ask if you're sure — click **Open**
-4. A terminal window flashes briefly, the app installs itself, and the cat appears above your dock
+```bash
+curl -fsSL https://raw.githubusercontent.com/laboyangelik/kitty-agents/main/install.sh | bash
+```
 
-The app updates itself automatically in the background via Sparkle — you'll get a prompt whenever a new version is ready.
+That's it — kitty agents downloads, installs itself, and opens automatically. The app keeps itself up to date from then on via Sparkle.
 
 ## requirements
 
