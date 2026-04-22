@@ -89,6 +89,8 @@ Once a CLI is installed and authenticated, it shows up automatically in menu bar
 
 ## menu bar
 
+![menu bar](https://drive.google.com/uc?export=view&id=1UEC4q0wW3-Rrf6E9EFmWFgNNvkbxxmxD)
+
 Click the cat icon in the menu bar to access:
 
 - **Hide / Show Cat** — toggle kitty on and off
