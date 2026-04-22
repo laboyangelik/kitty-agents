@@ -60,20 +60,9 @@ jobs:
           cp -R "$APP" "$RUNNER_TEMP/dist/"
           codesign --force --deep --sign - "$RUNNER_TEMP/dist/kitty agents.app"
 
-          # Create installer script — double-clicking this shows "Open" instead
-          # of the macOS Gatekeeper block that app bundles get without notarization.
-          cat > "$RUNNER_TEMP/dist/Install kitty agents.command" << 'SCRIPT'
-#!/bin/bash
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-APP_SRC="$SCRIPT_DIR/kitty agents.app"
-APP_DEST="/Applications/kitty agents.app"
-
-echo "installing kitty agents..."
-cp -R "$APP_SRC" "$APP_DEST"
-xattr -cr "$APP_DEST"
-echo "done! opening kitty agents..."
-open "$APP_DEST"
-SCRIPT
+          # Bundled installer — double-clicking shows "Open" in macOS instead
+          # of the hard block that app bundles get without notarization.
+          cp ".github/scripts/install.command" "$RUNNER_TEMP/dist/Install kitty agents.command"
           chmod +x "$RUNNER_TEMP/dist/Install kitty agents.command"
 
           cd "$RUNNER_TEMP/dist"
