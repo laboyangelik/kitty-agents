@@ -218,6 +218,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             char.setManuallyVisible(true)
             buildMenu()
         }
+        char.window.orderFrontRegardless()
         if !char.isIdleForPopover {
             char.openPopover()
         }
