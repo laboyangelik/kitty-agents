@@ -6,7 +6,8 @@ curl -fsSL -o /tmp/kitty-agents-latest.zip \
   "https://github.com/laboyangelik/kitty-agents/releases/latest/download/kitty-agents-latest.zip"
 
 echo "installing..."
-unzip -o /tmp/kitty-agents-latest.zip -d /tmp/kitty-agents-install/ > /dev/null
+rm -rf /tmp/kitty-agents-install/
+ditto -x -k /tmp/kitty-agents-latest.zip /tmp/kitty-agents-install/
 rm -rf "/Applications/kitty agents.app"
 ditto "/tmp/kitty-agents-install/kitty agents.app" "/Applications/kitty agents.app"
 xattr -cr "/Applications/kitty agents.app"
