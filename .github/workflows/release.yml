@@ -62,6 +62,7 @@ jobs:
 
           cd "$RUNNER_TEMP/dist"
           zip -r "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "kitty agents.app"
+          cp "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" "$RUNNER_TEMP/kitty-agents-latest.zip"
           echo "Size: $(du -sh "$RUNNER_TEMP/${{ steps.ver.outputs.zip }}" | cut -f1)"
 
       - name: Download Sparkle tools
@@ -93,7 +94,9 @@ jobs:
           tag_name: ${{ steps.ver.outputs.tag }}
           name: ${{ steps.ver.outputs.tag }}
           generate_release_notes: true
-          files: ${{ runner.temp }}/${{ steps.ver.outputs.zip }}
+          files: |
+            ${{ runner.temp }}/${{ steps.ver.outputs.zip }}
+            ${{ runner.temp }}/kitty-agents-latest.zip
 
       - name: Update appcast.xml
         env:

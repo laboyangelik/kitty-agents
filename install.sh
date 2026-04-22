@@ -7,7 +7,8 @@ curl -fsSL -o /tmp/kitty-agents-latest.zip \
 
 echo "installing..."
 unzip -o /tmp/kitty-agents-latest.zip -d /tmp/kitty-agents-install/ > /dev/null
-cp -R "/tmp/kitty-agents-install/kitty agents.app" /Applications/
+rm -rf "/Applications/kitty agents.app"
+ditto "/tmp/kitty-agents-install/kitty agents.app" "/Applications/kitty agents.app"
 xattr -cr "/Applications/kitty agents.app"
 
 echo "cleaning up..."
